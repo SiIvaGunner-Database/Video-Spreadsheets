@@ -1,6 +1,5 @@
 // Deletes and rebuilds all triggers in the current project
-function resetTriggers()
-{
+function resetTriggers() {
   var triggers = ScriptApp.getProjectTriggers();
   
   for (var i in triggers)

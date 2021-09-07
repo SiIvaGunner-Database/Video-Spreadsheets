@@ -1,6 +1,5 @@
 // Format a date for the spreadsheet
-function formatDate(date, style)
-{
+function formatDate(date, style) {
   if (typeof date == "string")
     date = date.replace("T", "   ").replace("Z", "").replace(".000Z", "");
   else 
@@ -12,10 +11,8 @@ function formatDate(date, style)
 
 
 // Format to a more easily readable string (WIP)
-function formatLength(length)
-{
-  for (var i = 0; i < length.length; i++)
-  {
+function formatLength(length) {
+  for (var i = 0; i < length.length; i++) {
     if (length.charAt(i) == "T" && length.charAt(i + 2) == "S")
       length = length.replace("PT", "0:0");
     else if (length.charAt(i) == "T" && length.charAt(i + 3) == "S")
@@ -37,8 +34,7 @@ function formatLength(length)
 
 
 // Formats a YouTube hyperlink function for the spreadsheet
-function formatYouTubeHyperlink(str)
-{
+function formatYouTubeHyperlink(str) {
   str = '=HYPERLINK("https://www.youtube.com/watch?v=' + str + '", "' + str + '")';
   return str;
 }
@@ -46,8 +42,7 @@ function formatYouTubeHyperlink(str)
 
 
 // Formats a wiki hyperlink function for the spreadsheet
-function formatWikiHyperlink(str, wikiUrl)
-{
+function formatWikiHyperlink(str, wikiUrl) {
   if (wikiUrl == null)
     wikiUrl = "https://siivagunner.fandom.com/wiki/";
   
@@ -61,8 +56,7 @@ function formatWikiHyperlink(str, wikiUrl)
 
 
 // Replaces bad url characters and banned words
-function formatWikiLink(str)
-{
+function formatWikiLink(str) {
   str = str.replace(/\[/g, '(');
   str = str.replace(/\]/g, ')');
   str = str.replace(/\{/g, '(');
