@@ -1,6 +1,6 @@
-# SiIvaGunner Rips Database
+# SiIvaGunner Video Spreadsheets
 
-Script files running on Google Apps Script and Google Cloud Functions are used to manage the spreadsheets and PostgreSQL database with data from SiIvaGunner and its related channels.
+Google Apps Script functions for documenting SiIvaGunner related videos in Google Sheets spreadsheets.
 
 ### External Links
 
