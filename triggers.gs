@@ -1,28 +1,40 @@
-// Deletes and rebuilds all triggers in the current project
+/**
+ * Deletes and recreates project triggers.
+ */
 function resetTriggers() {
+
   var triggers = ScriptApp.getProjectTriggers();
   
-  for (var i in triggers)
+  for (var i in triggers) {
     ScriptApp.deleteTrigger(triggers[i]);
+  }
 
-  ScriptApp.newTrigger('checkSheet')
+  ScriptApp.newTrigger('checkRecentVideos')
     .timeBased()
     .everyMinutes(10)
     .create();
 
-  ScriptApp.newTrigger('checkPublicVideos')
+  ScriptApp.newTrigger('checkVideoDetails')
     .timeBased()
     .everyDays(1)
-    .atHour(3)
+    .atHour(22)
     .create();
 
-  ScriptApp.newTrigger('checkDatabase')
+  ScriptApp.newTrigger('checkVideoDatabase')
     .timeBased()
-    .everyHours(12)
+    .everyDays(1)
+    .atHour(23)
     .create();
 
-  ScriptApp.newTrigger('updateDatabase')
+  ScriptApp.newTrigger('checkVideoStatuses')
     .timeBased()
-    .everyHours(4)
+    .everyDays(1)
+    .atHour(22)
     .create();
+
+  ScriptApp.newTrigger('checkWikiStatuses')
+    .timeBased()
+    .everyMinutes(60)
+    .create();
+
 }
