@@ -1,15 +1,35 @@
+const channelSheet = SpreadsheetApp.openById("16PLJOqdZOdLXguKmUlUwZfu-1rVXzuJLHbY18BUSOAw")
+const channels = HighQualityUtils.getSheetValues(channelSheet, "channel");
+
 /**
  * Checks for newly uploaded rips.
  */
 function checkRecentVideos() {
 
-  // TODO
+  channels.forEach((channel) => {
+    Logger.log("Working on " + channel.name);
+    const videoSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(channel.name);
+    const sheetVideos = HighQualityUtils.getSheetValues(videoSheet, "video");
+    const recentVideos = HighQualityUtils.getChannelUploads(channel.id, 50);
+    const newVideos = [];
 
-  // Fetch sheet data
-  // Fetch recent video data
-  // Check for consistency
-  // Add rows for new videos
-  // POST data for new videos
+    // Find any new videos
+    recentVideos.forEach((recentVideo) => {
+      if (!sheetVideos.includes()) {
+        newVideos.add(recentVideo);
+        Logger.log("New video: " + recentVideo.title);
+      }
+    });
+
+    // Add any new videos to the sheet and database
+    if (newVideos) {
+      HighQualityUtils.addToSheet(videoSheet, newVideos);
+      HighQualityUtils.postToVideoDb(newVideos);
+      Logger.log("Added " + newVideos.length + " new videos");
+    } else {
+      Logger.log("No new videos found");
+    }
+  });
 
 }
 
