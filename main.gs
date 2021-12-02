@@ -38,13 +38,37 @@ function checkRecentVideos() {
  */
 function checkVideoDatabase() {
 
-  // TODO
+  const allDbVideos = HighQualityUtils.getFromVideoDb();
 
-  // Fetch sheet data
-  // Fetch siivagunnerdatabase.net data
-  // Check for consistency
-  // POST missing data
-  // PUT existing data
+  channels.forEach((channel) => {
+    Logger.log("Working on " + channel.name);
+    const videoSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(channel.name);
+    const sheetVideos = HighQualityUtils.getSheetValues(videoSheet, "video");
+    const dbVideos = allDbVideos.filter((dbVideo) => { dbVideo.channel == channel.id });
+    const missingVideos = [];
+
+    // Find any videos missing from the database
+    if (sheetVideos.length > dbVideos.length) {
+      sheetVideos.forEach((sheetVideo) => {
+        if (!dbVideos.includes()) {
+          missingVideos.add(sheetVideo);
+          Logger.log("Missing video: " + sheetVideo.title);
+        }
+      });
+    }
+
+    // Add any missing videos to the database
+    if (missingVideos) {
+      HighQualityUtils.postToVideoDb(missingVideos);
+      Logger.log("Added " + newVideos.length + " new videos");
+    } else {
+      Logger.log("No missing videos found");
+    }
+
+    // Update all data in the database
+    HighQualityUtils.postToVideoDb(sheetVideos);
+    Logger.log("Updated video database");
+  });
 
 }
 
