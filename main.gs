@@ -17,7 +17,7 @@ function checkRecentVideos() {
     // Find any new videos
     recentVideos.forEach((recentVideo) => {
       if (!sheetVideos.includes()) {
-        newVideos.add(recentVideo);
+        newVideos.push(recentVideo);
         Logger.log("New video: " + recentVideo.title);
       }
     });
@@ -55,7 +55,7 @@ function checkVideoDatabase() {
     if (sheetVideos.length > dbVideos.length) {
       sheetVideos.forEach((sheetVideo) => {
         if (!dbVideos.includes()) {
-          missingVideos.add(sheetVideo);
+          missingVideos.push(sheetVideo);
           Logger.log("Missing video: " + sheetVideo.title);
         }
       });
@@ -94,16 +94,14 @@ function checkVideoDetails() {
     const videoIds = sheetVideos.map((sheetVideo) => { return sheetVideo.id });
     const ytVideos = HighQualityUtils.getVideos(videoIds);
 
-    // Update video data
-    for (let i in sheetVideos) {
-      const sheetVideo = sheetVideos[i];
-      const row = parseInt(i) + 2;
-      Logger.log("Updating row " + row + ": " + sheetVideo.title);
-      const ytVideo = ytVideos.filter((ytVideo) => { ytVideo.id == sheetVideo.id })[0];
+    sheetVideos.forEach((sheetVideo, sheetIndex) => {
+      Logger.log("Updating " + sheetVideo.title);
+      const ytIndex = ytVideos.indexOf((ytVideo) => { ytVideo.id == sheetVideo.id })[0];
+      const ytVideo = ytVideos[ytIndex];
 
       if (!ytVideo) {
         Logger.log("No corresponding video found; skipping row...");
-        continue;
+        return;
       }
 
       if (sheetVideo.title != ytVideo.title) {
@@ -127,8 +125,8 @@ function checkVideoDetails() {
       // Set sheet hyperlinks
       sheetVideo.id = HighQualityUtils.formatYouTubeHyperlink(sheetVideo.id);
       sheetVideo.title = HighQualityUtils.formatFandomHyperlink(sheetVideo.title);
-      sheetVideos[i] = sheetVideo;
-    }
+      sheetVideos[sheetIndex] = sheetVideo;
+    });
 
     HighQualityUtils.updateInSheet(videoSheet, sheetVideos, 2)
   });
@@ -140,15 +138,55 @@ function checkVideoDetails() {
  */
 function checkVideoStatuses() {
 
-  // TODO
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const statusChangelogSheet = SpreadsheetApp.openById("1EKQq1K8Bd7hDlFMg1Y5G_a2tWk_FH39bgniUUBGlFKM").getSheetByName("Statuses");
+  const channelSheet = SpreadsheetApp.openById("16PLJOqdZOdLXguKmUlUwZfu-1rVXzuJLHbY18BUSOAw");
+  const channels = HighQualityUtils.getSheetValues(channelSheet, "channel");
 
-  // Fetch sheet data
-  // Fetch channel uploads data
-  // Find videos missing from uploads
+  channels.forEach((channel) => {
+    Logger.log("Working on " + channel.name);
+    const videoSheet = spreadsheet.getSheetByName(channel.name);
+    const sheetVideos = HighQualityUtils.getSheetValues(videoSheet, "video");
+    const ytVideos = HighQualityUtils.getChannelUploads(channel.id);
+    const vidsMissingFromSheet = ytVideos.slice();
 
-  // Loop through missing uploads
-  // Check video status
-  // Update video changelog
+    sheetVideos.forEach((sheetVideo, sheetIndex) => {
+      Logger.log("Updating " + sheetVideo.title);
+      const row = parseInt(sheetIndex) + 2;
+      const ytIndex = ytVideos.indexOf((ytVideo) => { ytVideo.id == sheetVideo.id })[0];
+      const ytVideo = ytVideos[ytIndex];
+
+      if (!ytVideo) {
+        const currentStatus = HighQualityUtils.getYouTubeStatus(ytVideo.id);
+        Logger.log("No corresponding video found; current status is " + currentStatus);
+
+        if (sheetVideo.youtubeStatus != currentStatus) {
+          HighQualityUtils.logChange(statusChangelogSheet, sheetVideo.id, "YouTube Status", sheetVideo.youtubeStatus, currentStatus);
+          sheetVideo.youtubeStatus = currentStatus;
+          HighQualityUtils.updateInSheet(videoSheet, sheetVideo, row);
+          Logger.log("New status: " + sheetVideo.youtubeStatus);
+        }
+      } else  {
+        vidsMissingFromSheet.splice(ytIndex, 1);
+
+        if (sheetVideo.youtubeStatus != "Public") {
+          HighQualityUtils.logChange(statusChangelogSheet, sheetVideo.id, "YouTube Status", sheetVideo.youtubeStatus, "Public");
+          sheetVideo.youtubeStatus = "Public";
+          HighQualityUtils.updateInSheet(videoSheet, sheetVideo, row);
+          Logger.log("New status: Public");
+        }
+      }
+    });
+
+    if (vidsMissingFromSheet.length > 0) {
+      const missingIds = vidsMissingFromSheet.map((video) => { return video.id });
+      const message = "Videos missing from " + channel.name + " sheet: " + missingIds.join(", ");
+      Logger.log(message);
+      HighQualityUtils.logEvent(message);
+      HighQualityUtils.addToSheet(videoSheet, vidsMissingFromSheet);
+      Logger.log("Added " + vidsMissingFromSheet.length + " missing videos");
+    }
+  });
 
 }
 
