@@ -2,10 +2,9 @@
  * Deletes and recreates project triggers.
  */
 function resetTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
 
-  var triggers = ScriptApp.getProjectTriggers();
-  
-  for (var i in triggers) {
+  for (let  i in triggers) {
     ScriptApp.deleteTrigger(triggers[i]);
   }
 
@@ -36,5 +35,4 @@ function resetTriggers() {
     .timeBased()
     .everyMinutes(60)
     .create();
-
 }

@@ -2,21 +2,26 @@
  * Checks for newly uploaded rips.
  */
 function checkRecentVideos() {
-
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const channelSheet = SpreadsheetApp.openById("16PLJOqdZOdLXguKmUlUwZfu-1rVXzuJLHbY18BUSOAw");
   const channels = HighQualityUtils.getSheetValues(channelSheet, "channel");
 
   channels.forEach((channel) => {
+    if (channel.youtubeStatus != "Public") {
+      Logger.log("Skipping " + channel.name + "; current status is " + channel.youtubeStatus);
+      return;
+    }
+
     Logger.log("Working on " + channel.name);
     const videoSheet = spreadsheet.getSheetByName(channel.name);
     const sheetVideos = HighQualityUtils.getSheetValues(videoSheet, "video");
+    const sheetIds = sheetVideos.map(video => video.id);
     const recentVideos = HighQualityUtils.getChannelUploads(channel.id, 50);
     const newVideos = [];
 
     // Find any new videos
     recentVideos.forEach((recentVideo) => {
-      if (!sheetVideos.includes()) {
+      if (!sheetIds.includes(recentVideo.id)) {
         newVideos.push(recentVideo);
         Logger.log("New video: " + recentVideo.title);
       }
@@ -31,30 +36,34 @@ function checkRecentVideos() {
       Logger.log("No new videos found");
     }
   });
-
 }
 
 /**
  * Checks for consistency with the video database.
  */
 function checkVideoDatabase() {
-
   const allDbVideos = HighQualityUtils.getFromVideoDb();
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const channelSheet = SpreadsheetApp.openById("16PLJOqdZOdLXguKmUlUwZfu-1rVXzuJLHbY18BUSOAw");
   const channels = HighQualityUtils.getSheetValues(channelSheet, "channel");
 
   channels.forEach((channel) => {
+    if (channel.youtubeStatus != "Public") {
+      Logger.log("Skipping " + channel.name + "; current status is " + channel.youtubeStatus);
+      return;
+    }
+
     Logger.log("Working on " + channel.name);
     const videoSheet = spreadsheet.getSheetByName(channel.name);
     const sheetVideos = HighQualityUtils.getSheetValues(videoSheet, "video");
-    const dbVideos = allDbVideos.filter((dbVideo) => { dbVideo.channel == channel.id });
+    const dbVideos = allDbVideos.filter(dbVideo => dbVideo.channel == channel.id);
+    const dbIds = dbVideos.map(video => video.id);
     const missingVideos = [];
 
     // Find any videos missing from the database
     if (sheetVideos.length > dbVideos.length) {
       sheetVideos.forEach((sheetVideo) => {
-        if (!dbVideos.includes()) {
+        if (!dbIds.includes(sheetVideo.id)) {
           missingVideos.push(sheetVideo);
           Logger.log("Missing video: " + sheetVideo.title);
         }
@@ -73,14 +82,12 @@ function checkVideoDatabase() {
     HighQualityUtils.postToVideoDb(sheetVideos);
     Logger.log("Updated video database");
   });
-
 }
 
 /**
  * Checks for video details and statistics updates.
  */
 function checkVideoDetails() {
-
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const titleChangelogSheet = SpreadsheetApp.openById("1EKQq1K8Bd7hDlFMg1Y5G_a2tWk_FH39bgniUUBGlFKM").getSheetByName("Titles");
   const descChangelogSheet = SpreadsheetApp.openById("1EKQq1K8Bd7hDlFMg1Y5G_a2tWk_FH39bgniUUBGlFKM").getSheetByName("Descriptions");
@@ -88,19 +95,24 @@ function checkVideoDetails() {
   const channels = HighQualityUtils.getSheetValues(channelSheet, "channel");
 
   channels.forEach((channel) => {
+    if (channel.youtubeStatus != "Public") {
+      Logger.log("Skipping " + channel.name + "; current status is " + channel.youtubeStatus);
+      return;
+    }
+
     Logger.log("Working on " + channel.name);
     const videoSheet = spreadsheet.getSheetByName(channel.name);
     const sheetVideos = HighQualityUtils.getSheetValues(videoSheet, "video");
-    const videoIds = sheetVideos.map((sheetVideo) => { return sheetVideo.id });
+    const videoIds = sheetVideos.map(video => video.id);
     const ytVideos = HighQualityUtils.getVideos(videoIds);
 
     sheetVideos.forEach((sheetVideo, sheetIndex) => {
       Logger.log("Updating " + sheetVideo.title);
-      const ytIndex = ytVideos.indexOf((ytVideo) => { ytVideo.id == sheetVideo.id })[0];
+      const ytIndex = ytVideos.indexOf(ytVideo => ytVideo.id == sheetVideo.id);
       const ytVideo = ytVideos[ytIndex];
 
       if (!ytVideo) {
-        Logger.log("No corresponding video found; skipping row...");
+        Logger.log("Skipping row; no corresponding video found");
         return;
       }
 
@@ -130,31 +142,34 @@ function checkVideoDetails() {
 
     HighQualityUtils.updateInSheet(videoSheet, sheetVideos, 2)
   });
-
 }
 
 /**
  * Checks for video status changes.
  */
 function checkVideoStatuses() {
-
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const statusChangelogSheet = SpreadsheetApp.openById("1EKQq1K8Bd7hDlFMg1Y5G_a2tWk_FH39bgniUUBGlFKM").getSheetByName("Statuses");
   const channelSheet = SpreadsheetApp.openById("16PLJOqdZOdLXguKmUlUwZfu-1rVXzuJLHbY18BUSOAw");
   const channels = HighQualityUtils.getSheetValues(channelSheet, "channel");
 
   channels.forEach((channel) => {
+    if (channel.youtubeStatus != "Public") {
+      Logger.log("Skipping " + channel.name + "; current status is " + channel.youtubeStatus);
+      return;
+    }
+
     Logger.log("Working on " + channel.name);
     const videoSheet = spreadsheet.getSheetByName(channel.name);
     const sheetVideos = HighQualityUtils.getSheetValues(videoSheet, "video");
     const ytVideos = HighQualityUtils.getChannelUploads(channel.id);
-    const vidsMissingFromSheet = ytVideos.slice();
+    const extraYtVideos = ytVideos.slice();
 
     sheetVideos.forEach((sheetVideo, sheetIndex) => {
       Logger.log("Updating " + sheetVideo.title);
       const row = parseInt(sheetIndex) + 2;
-      const ytIndex = ytVideos.indexOf((ytVideo) => { ytVideo.id == sheetVideo.id })[0];
-      const ytVideo = ytVideos[ytIndex];
+      const ytIndex = extraYtVideos.indexOf(ytVideo => ytVideo.id == sheetVideo.id);
+      const ytVideo = extraYtVideos[ytIndex];
 
       if (!ytVideo) {
         const currentStatus = HighQualityUtils.getYouTubeStatus(ytVideo.id);
@@ -167,7 +182,7 @@ function checkVideoStatuses() {
           Logger.log("New status: " + sheetVideo.youtubeStatus);
         }
       } else  {
-        vidsMissingFromSheet.splice(ytIndex, 1);
+        extraYtVideos.splice(ytIndex, 1);
 
         if (sheetVideo.youtubeStatus != "Public") {
           HighQualityUtils.logChange(statusChangelogSheet, sheetVideo.id, "YouTube Status", sheetVideo.youtubeStatus, "Public");
@@ -178,32 +193,108 @@ function checkVideoStatuses() {
       }
     });
 
-    if (vidsMissingFromSheet.length > 0) {
-      const missingIds = vidsMissingFromSheet.map((video) => { return video.id });
+    if (extraYtVideos.length > 0) {
+      const missingIds = extraYtVideos.map(video => video.id);
       const message = "Videos missing from " + channel.name + " sheet: " + missingIds.join(", ");
       Logger.log(message);
       HighQualityUtils.logEvent(message);
-      HighQualityUtils.addToSheet(videoSheet, vidsMissingFromSheet);
-      Logger.log("Added " + vidsMissingFromSheet.length + " missing videos");
+      HighQualityUtils.addToSheet(videoSheet, extraYtVideos);
+      Logger.log("Added " + extraYtVideos.length + " missing videos");
     }
   });
-
 }
 
 /**
  * Checks for wiki status changes.
  */
 function checkWikiStatuses() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const channelSheet = SpreadsheetApp.openById("16PLJOqdZOdLXguKmUlUwZfu-1rVXzuJLHbY18BUSOAw");
+  const channels = HighQualityUtils.getSheetValues(channelSheet, "channel");
 
-  // TODO
+  channels.forEach((channel) => {
+    if (channel.youtubeStatus != "Public") {
+      Logger.log("Skipping " + channel.name + "; current status is " + channel.youtubeStatus);
+      return;
+    }
 
-  // Fetch undocumented rips from sheet data
-  // Fetch undocumented rips from playlist
-  // Check for consistency
-  // Add / remove from playlist
+    if (!channel.wiki) {
+      Logger.log("Skipping " + channel.name + "; no corresponding wiki found");
+      return;
+    }
 
-  // Fetch category:rips data
-  // Check for new / existing articles
-  // Add / remove from playlist
+    Logger.log("Working on " + channel.name);
+    const videoSheet = spreadsheet.getSheetByName(channel.name);
+    const sheetVideos = HighQualityUtils.getSheetValues(videoSheet, "video");
+    const undocumentedSheetVideos = sheetVideos.filter(video => video.wikiStatus == "Undocumented");
+    let playlistId = "";
 
+    // If the current channel is SiIvaGunner or TimmyTurnersGrandDad, update the Undocumented Rips playlist
+    if (channel.id == "UC9ecwl3FTG66jIKA9JRDtmg" || channel.id == "UCIXM2qZRG9o4AFmEsKZUIvQ") {
+      if (channel.id == "UC9ecwl3FTG66jIKA9JRDtmg") {
+        playlistId = "PLn8P5M1uNQk4_1_eaMchQE5rBpaa064ni";
+      } else if (channel.id == "UCIXM2qZRG9o4AFmEsKZUIvQ") {
+        playlistId = "PLn8P5M1uNQk6B4aJfjJZX1gdzlaHpgRAm";
+      }
+
+      const undocumentedPlVideos = HighQualityUtils.getPlaylistItems(playlistId);
+      const extraPlVideos = undocumentedPlVideos.slice();
+
+      undocumentedSheetVideos.forEach((sheetVideo) => {
+        const plIndex = extraPlVideos.indexOf(plVideo => plVideo.id == sheetVideo.id);
+
+        if (plIndex == -1) {
+          if (sheetVideo.youtubeStatus ==  "Public" || sheetVideo.youtubeStatus ==  "Unlisted") {
+            HighQualityUtils.addToPlaylist(playlistId, sheetVideo.id);
+            Logger.log("Added " + sheetVideo.title + " to playlist");
+          }
+        } else {
+          extraPlVideos.splice(plIndex, 1);
+        }
+      });
+
+      extraPlVideos.forEach((video) => {
+        HighQualityUtils.removeFromPlaylist(playlistId, video.id);
+        Logger.log("Removed " + video.title + " from playlist");
+      });
+    }
+
+    const ripTitles = HighQualityUtils.getCategoryMembers(channel.wiki, "rips");
+    const extraRipTitles = ripTitles.slice();
+
+    // Check the wiki for new and existing video / rip articles
+    sheetVideos.forEach((sheetVideo, index) => {
+      const formattedVideoTitle = HighQualityUtils.formatFandomPageName(sheetVideo.title);
+      const wikiIndex = extraRipTitles.indexOf(title => title == formattedVideoTitle);
+      const row = parseInt(index) + 2;
+
+      if (wikiIndex != -1) {
+        extraRipTitles.splice(wikiIndex, 1);
+      }
+
+      if (wikiIndex != -1 && sheetVideo.wikiStatus != "Documented") {
+        Logger.log("Now documented: " + sheetVideo.title);
+        videoSheet.getRange(row, 3).setValue("Documented");
+
+        if (playlistId && (sheetVideo.youtubeStatus ==  "Public" || sheetVideo.youtubeStatus ==  "Unlisted")) {
+          HighQualityUtils.removeFromPlaylist(playlistId, sheetVideo.id);
+          Logger.log("Removed " + sheetVideo.title + " from playlist");
+        }
+      } else if (wikiIndex == -1 && sheetVideo.wikiStatus == "Documented") {
+        Logger.log("Now undocumented: " + sheetVideo.title);
+        videoSheet.getRange(row, 3).setValue("Undocumented");
+
+        if (playlistId && (sheetVideo.youtubeStatus ==  "Public" || sheetVideo.youtubeStatus ==  "Unlisted")) {
+          HighQualityUtils.addToPlaylist(playlistId, sheetVideo.id);
+          Logger.log("Added " + sheetVideo.title + " to playlist");
+        }
+      }
+    });
+
+    if (extraRipTitles.length > 0) {
+      const message = "Articles missing from " + channel.name + " sheet: " + extraRipTitles.join(", ");
+      Logger.log(message);
+      HighQualityUtils.logEvent(message);
+    }
+  });
 }
