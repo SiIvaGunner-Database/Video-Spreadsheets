@@ -30,7 +30,7 @@ function checkRecentVideos() {
     // Add any new videos to the sheet and database
     if (newVideos) {
       HighQualityUtils.addToSheet(videoSheet, newVideos);
-      HighQualityUtils.postToVideoDb(newVideos);
+      HighQualityUtils.getDatabaseResponse("rips", "post", newVideos);
       Logger.log("Added " + newVideos.length + " new videos");
     } else {
       Logger.log("No new videos found");
@@ -42,7 +42,7 @@ function checkRecentVideos() {
  * Checks for consistency with the video database.
  */
 function checkVideoDatabase() {
-  const allDbVideos = HighQualityUtils.getFromVideoDb();
+  const allDbVideos = HighQualityUtils.getDatabaseResponse("rips");
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const channelSheet = SpreadsheetApp.openById("16PLJOqdZOdLXguKmUlUwZfu-1rVXzuJLHbY18BUSOAw");
   const channels = HighQualityUtils.getSheetValues(channelSheet, "channel");
@@ -72,14 +72,14 @@ function checkVideoDatabase() {
 
     // Add any missing videos to the database
     if (missingVideos) {
-      HighQualityUtils.postToVideoDb(missingVideos);
+      HighQualityUtils.getDatabaseResponse("rips", "post", missingVideos);
       Logger.log("Added " + missingVideos.length + " missing videos");
     } else {
       Logger.log("No missing videos found");
     }
 
     // Update all data in the database
-    HighQualityUtils.postToVideoDb(sheetVideos);
+    HighQualityUtils.getDatabaseResponse("rips", "put", sheetVideos);
     Logger.log("Updated video database");
   });
 }
