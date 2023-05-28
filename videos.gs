@@ -12,9 +12,10 @@ function checkSheet() {
   var channel = "SiIvaGunner";
   var updateCount = 0;
   
-  if (startDate % 14 == 0 && startMinute >= 50)
-    channel = "Flustered Fernando";
-  else if (startDate % 4 == 0 && startMinute >= 50)
+  // if (startDate % 14 == 0 && startMinute >= 50)
+  //   channel = "Flustered Fernando";
+  // else 
+  if (/*startDate % 4 == 0 && */startMinute >= 50)
     channel = "VvvvvaVvvvvvr";
   else if (startMinute <= 10)
     channel = "TimmyTurnersGrandDad";
@@ -29,6 +30,7 @@ function checkSheet() {
     case "TimmyTurnersGrandDad":
       var channelId = "UCIXM2qZRG9o4AFmEsKZUIvQ";
       var channelDatabaseId = 3;
+      var playlistId = "PLn8P5M1uNQk6B4aJfjJZX1gdzlaHpgRAm";
       var wikiUrl = "https://ttgd.fandom.com/wiki/";
       break;
     case "VvvvvaVvvvvvr":
@@ -140,7 +142,7 @@ function checkSheet() {
             var description = item.snippet.description.toString().replace(/\r/g, "").replace(/\n/g, "NEWLINE");
             var viewCount = item.statistics.viewCount;
             var likeCount = item.statistics.likeCount;
-            var dislikeCount = item.statistics.dislikeCount;
+            var dislikeCount = item.statistics.dislikeCount || 0;
             var commentCount = item.statistics.commentCount;
 
             if (!commentCount)
@@ -168,11 +170,11 @@ function checkSheet() {
               };
 
               Logger.log("Insert " + videoId + " to database");
-              var updateResponse = postToDatabase(data);
-              Logger.log(updateResponse);
+              // var updateResponse = postToDatabase(data);
+              // Logger.log(updateResponse);
 
-              if (updateResponse.indexOf("Error") != -1)
-                errorLog.push(updateResponse);
+              // if (updateResponse.indexOf("Error") != -1)
+              //   errorLog.push(updateResponse);
             }
 
             channelSheet.insertRowAfter(lastRow);
@@ -373,7 +375,7 @@ function checkSheet() {
       if (currentStatus != "Public")
         newStatus = "Public";
     }
-    else if (responseText.indexOf('"This video is private."') != -1) {
+    else if (responseText.indexOf('"This video is private"') != -1) {
       if (currentStatus != "Private")
         newStatus = "Private";
     }
@@ -426,7 +428,9 @@ function checkSheet() {
         
         channelSheet.getRange(row, videoViewsCol).setValue(viewCount);
         channelSheet.getRange(row, videoLikesCol).setValue(likeCount);
-        channelSheet.getRange(row, videoDislikesCol).setValue(dislikeCount);
+        if (dislikeCount) {
+          channelSheet.getRange(row, videoDislikesCol).setValue(dislikeCount);
+        }
         channelSheet.getRange(row, videoCommentsCol).setValue(commentCount);
       }
       catch(e) {
@@ -508,7 +512,7 @@ function checkPublicVideos() {
       Logger.log("Missing from spreadsheet: " + missingVideoIds[k]);
     
     // Add missing videos to the corresponding sheet and database table
-    //addRipsToSheet(missingVideoIds, channelTitle);
+    addRipsToSheet(missingVideoIds, channelTitle);
 
     if (channelDatabaseId != null && missingVideoIds.length > 0) {
       var subject = "SiIvaGunner Spreadsheet Missing IDs";
@@ -517,7 +521,7 @@ function checkPublicVideos() {
       MailApp.sendEmail(emailAddress, subject, message);
       Logger.log("Email successfully sent.");
 
-      //addRipsToDatabase(missingVideoIds, channelTitle, channelDatabaseId);
+      // addRipsToDatabase(missingVideoIds, channelTitle, channelDatabaseId);
     }
   }
 }
@@ -625,6 +629,8 @@ function checkRemovedVideos() {
 function checkPlaylistVideos() {
   var channelSheet = spreadsheet.getSheetByName("SiIvaGunner");
   var playlistId = "PLn8P5M1uNQk4_1_eaMchQE5rBpaa064ni";
+  // var channelSheet = spreadsheet.getSheetByName("TimmyTurnersGrandDad");
+  // var playlistId = "PLn8P5M1uNQk6B4aJfjJZX1gdzlaHpgRAm";
   var playlistVideoIds = [];
   var sheetUndocumentedIds = [];
   var sheetVideoIds = channelSheet.getRange(2, idCol, channelSheet.getLastRow() - 1).getDisplayValues();
@@ -762,7 +768,9 @@ function addRipsToSheet(videoIds, channel) {
       channelSheet.getRange(lastRow, videoDescriptionCol).setValue(description);
       channelSheet.getRange(lastRow, videoViewsCol).setValue(viewCount);
       channelSheet.getRange(lastRow, videoLikesCol).setValue(likeCount);
-      channelSheet.getRange(lastRow, videoDislikesCol).setValue(dislikeCount);
+      if (dislikeCount) {
+        channelSheet.getRange(lastRow, videoDislikesCol).setValue(dislikeCount);
+      }
       channelSheet.getRange(lastRow, videoCommentsCol).setValue(commentCount);
       
       Logger.log("Added " + item.snippet.title + " to " + channel);
@@ -856,15 +864,15 @@ function updateDatabase() {
   };
 
   Logger.log("Selected " + videoIds.length + " rips from " + channel);
-  var updateResponse = postToDatabase(data);
-  Logger.log(updateResponse);
+  // var updateResponse = postToDatabase(data);
+  // Logger.log(updateResponse);
 
-  if (updateResponse.indexOf("Error") != -1) {
-    var subject = "SiIvaGunner Database Update Error";
+  // if (updateResponse.indexOf("Error") != -1) {
+  //   var subject = "SiIvaGunner Database Update Error";
     
-    MailApp.sendEmail(emailAddress, subject, updateResponse);
-    Logger.log("Email successfully sent.");
-  }
+  //   MailApp.sendEmail(emailAddress, subject, updateResponse);
+  //   Logger.log("Email successfully sent.");
+  // }
 }
 
 
@@ -895,23 +903,23 @@ function checkDatabase()  {
   };
 
   Logger.log(channel + " has " + videoIds.length + " rips");
-  var updateResponse = postToDatabase(data);
-  Logger.log(updateResponse);
+  // var updateResponse = postToDatabase(data);
+  // Logger.log(updateResponse);
 
-  updateResponse = updateResponse.replace("Missing IDs: ", "").split(", ");
+  // updateResponse = updateResponse.replace("Missing IDs: ", "").split(", ");
 
-  if (updateResponse != "" || updateResponse.indexOf("Error") != -1) {
-    if (updateResponse != "")
-      var subject = "SiIvaGunner Database Missing IDs";
-    else
-      var subject = "SiIvaGunner Database Check Error";
+  // if (updateResponse != "" || updateResponse.indexOf("Error") != -1) {
+  //   if (updateResponse != "")
+  //     var subject = "SiIvaGunner Database Missing IDs";
+  //   else
+  //     var subject = "SiIvaGunner Database Check Error";
     
-    MailApp.sendEmail(emailAddress, subject, updateResponse);
-    Logger.log("Email successfully sent.");
+  //   MailApp.sendEmail(emailAddress, subject, updateResponse);
+  //   Logger.log("Email successfully sent.");
 
-    //if (updateResponse != "")
-      //addRipsToDatabase(updateResponse, channel, channelDatabaseId);
-  }
+  //   //if (updateResponse != "")
+  //     //addRipsToDatabase(updateResponse, channel, channelDatabaseId);
+  // }
 }
 
 
@@ -967,8 +975,8 @@ function addRipsToDatabase(idsToAdd, channel, channelDatabaseId) {
       };
 
       Logger.log("Insert " + videoId + " to database");
-      var updateResponse = postToDatabase(data);
-      Logger.log(updateResponse);
+      // var updateResponse = postToDatabase(data);
+      // Logger.log(updateResponse);
     }
     else 
       Logger.log(videoId + " not found");
