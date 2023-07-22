@@ -7,57 +7,18 @@ const spreadsheetBotId = HighQualityUtils.settings().getBotId()
 const channels = HighQualityUtils.channels().getAll({ "channelStatus": "Public" })
 
 /**
- * Checks for newly uploaded rips.
+ * Check all channels for newly uploaded rips.
  */
-function checkRecentVideos() {
+function checkAllRecentVideos() {
   const channelIndexKey = "checkRecentVideos.channelIndex"
 
   let channelIndex = Number(ScriptProperties.getProperty(channelIndexKey))
   const channel = channels[channelIndex]
   console.log(`Checking recent ${channel.getDatabaseObject().title} videos`)
 
-  const videoSheet = channel.getSheet()
-  const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
-
   const options = { "limit": 50 }
   const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options)
-
-  videos.forEach(video => {
-    if (video.getDatabaseObject() === undefined) {
-      console.log(`New video: ${video.getId()}`)
-
-      if (undocumentedRipsPlaylist !== undefined) {
-        undocumentedRipsPlaylist.addVideo(video.getId())
-      }
-
-      const defaults = {
-        "wikiStatus": "Undocumented",
-        "videoStatus": "Public"
-      }
-      video.createDatabaseObject(defaults)
-
-      const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
-      const videoValues = [[
-        videoHyperlink,
-        video.getWikiHyperlink(),
-        defaults.wikiStatus,
-        defaults.videoStatus,
-        video.getDatabaseObject().publishedAt,
-        video.getDatabaseObject().duration,
-        video.getDatabaseObject().description,
-        video.getDatabaseObject().viewCount,
-        video.getDatabaseObject().likeCount,
-        0, // Dislike count
-        video.getDatabaseObject().commentCount
-      ]]
-
-      // TODO check the sheet for existing values before inserting?
-      videoSheet.insertValues(videoValues)
-      videoSheet.sort(5)
-    } else {
-      console.log(`Skipping ${video.getid()}`)
-    } 
-  })
+  videos.forEach(video => checkNewVideo(video))
 
   // If this is the last of the videos to update for this channel
   if (channelIndex >= channels.length - 1) {
@@ -70,9 +31,50 @@ function checkRecentVideos() {
 }
 
 /**
- * Checks for video details and statistics updates.
+ * Add a public video to the database if it's missing.
+ * @param {Video} video - The video object.
  */
-function checkVideoDetails() {
+function checkNewVideo(video) {
+  if (video.getDatabaseObject() !== undefined) {
+    console.log(`${video.getid()} has already been added to the database`)
+    return
+  }
+
+  console.log(`New video: ${video.getId()}`)
+  const channel = video.getChannel()
+  const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
+
+  if (undocumentedRipsPlaylist !== undefined) {
+    undocumentedRipsPlaylist.addVideo(video.getId())
+  }
+
+  const defaults = {
+    "wikiStatus": "Undocumented",
+    "videoStatus": "Public"
+  }
+  video.createDatabaseObject(defaults)
+
+  const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
+  const videoValues = [[
+    videoHyperlink,
+    video.getWikiHyperlink(),
+    video.getDatabaseObject().wikiStatus,
+    video.getDatabaseObject().videoStatus,
+    video.getDatabaseObject().publishedAt,
+    video.getDatabaseObject().duration,
+    video.getDatabaseObject().description,
+    video.getDatabaseObject().viewCount,
+    video.getDatabaseObject().likeCount,
+    0, // Dislike count
+    video.getDatabaseObject().commentCount
+  ]]
+  channel.getSheet().insertValues(videoValues).sort(5)
+}
+
+/**
+ * Check all channels for video details and statistics updates.
+ */
+function checkAllVideoDetails() {
   const videoLimit = 500
   const channelIndexKey = "checkVideoDetails.channelIndex"
   const pageTokenKey = "checkVideoDetails.pageToken"
@@ -93,78 +95,27 @@ function checkVideoDetails() {
 
   // Check for updates on each video
   videos.forEach(video => {
-    if (video.getDatabaseObject() === undefined) {
-      console.log(`Skipping ${video.getId()}`)
-      return
-    }
-
-    const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
-    console.log(video.getDatabaseObject().title)
-
-    // If any YouTube metadata has changed
-    if (video.hasChanges() === true) {
-      const changes = video.getChanges()
-
-      // Add specified fields to the changelog sheet
-      changes.forEach(change => {
-        console.log(change.message)
-
-        if (change.key === "title") {
-          const newWikiHyperlink = HighQualityUtils.utils().formatFandomHyperlink(change.newValue, channel.getDatabaseObject().wiki)
-          titleChangelogValues.push([
-            videoHyperlink,
-            video.getWikiHyperlink(),
-            newWikiHyperlink,
-            channel.getDatabaseObject().title,
-            change.timestamp
-          ])
-        } else if (change.key === "description") {
-          descriptionChangelogValues.push([
-            videoHyperlink,
-            video.getWikiHyperlink(),
-            change.oldValue,
-            change.newValue,
-            channel.getDatabaseObject().title,
-            change.timestamp
-          ])
-        }
-      })
-    }
-
-    videoValues.push([
-      videoHyperlink,
-      video.getWikiHyperlink(),
-      video.getDatabaseObject().wikiStatus,
-      video.getDatabaseObject().videoStatus,
-      video.getDatabaseObject().publishedAt,
-      video.getDatabaseObject().duration,
-      video.getDatabaseObject().description,
-      video.getDatabaseObject().viewCount,
-      video.getDatabaseObject().likeCount,
-      video.getDatabaseObject().dislikeCount,
-      video.getDatabaseObject().commentCount
-    ])
+    const videoDetails = getVideoDetails(video)
+    videoValues.push(...videoDetails.videoValues)
+    titleChangelogValues.push(...videoDetails.titleChangelogValues)
+    descriptionChangelogValues.push(...videoDetails.descriptionChangelogValues)
   })
-
-  const videoSheet = channel.getSheet()
-  const titleChangelogSheet = channel.getChangelogSpreadsheet().getSheet("Titles")
-  const descriptionChangelogSheet = channel.getChangelogSpreadsheet().getSheet("Descriptions")
 
   // Push the updates to the database, channel sheet, and changelog sheet
   if (titleChangelogValues.length > 0) {
-    titleChangelogSheet.insertValues(titleChangelogValues)
-    titleChangelogSheet.sort(5, false)
+    const titleChangelogSheet = channel.getChangelogSpreadsheet().getSheet("Titles")
+    titleChangelogSheet.insertValues(titleChangelogValues).sort(5, false)
   }
 
   if (descriptionChangelogValues.length > 0) {
-    descriptionChangelogSheet.insertValues(descriptionChangelogValues)
-    descriptionChangelogSheet.sort(6, false)
+    const descriptionChangelogSheet = channel.getChangelogSpreadsheet().getSheet("Descriptions")
+    descriptionChangelogSheet.insertValues(descriptionChangelogValues).sort(6, false)
   }
 
   if (videoValues.length > 0) {
+    const videoSheet = channel.getSheet()
     const rowIndex = videoSheet.getRowIndexOfValue(videos[0].getId())
-    videoSheet.updateValues(videoValues, rowIndex)
-    videoSheet.sort(5)
+    videoSheet.updateValues(videoValues, rowIndex).sort(5)
   }
 
   HighQualityUtils.videos().updateAll(videos)
@@ -181,9 +132,78 @@ function checkVideoDetails() {
 }
 
 /**
- * Checks for video status changes.
+ * Get a video's details and statistics values as well as title and description changelog values if the values have changed.
+ * @param {Video} video - The video object.
+ * @return {Object} An object containing three arrays: { videoValues: Array[String|Number|Date]; titleChangelogValues: Array[String|Date]; descriptionChangelogValues: Array[String|Date]; }
  */
-function checkVideoStatuses() {
+function getVideoDetails(video) {
+  if (video.getDatabaseObject() === undefined) {
+    console.log(`Adding ${video.getId()} to database`)
+    checkNewVideo(video)
+    return
+  }
+
+  const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
+  const videoValues = []
+  const titleChangelogValues = []
+  const descriptionChangelogValues = []
+  console.log(video.getDatabaseObject().title)
+
+  // If any YouTube metadata has changed
+  if (video.hasChanges() === true) {
+    const changes = video.getChanges()
+
+    // Add specified fields to the changelog sheet
+    changes.forEach(change => {
+      console.log(change.message)
+
+      if (change.key === "title") {
+        const newWikiHyperlink = HighQualityUtils.utils().formatFandomHyperlink(change.newValue, channel.getDatabaseObject().wiki)
+        titleChangelogValues.push([
+          videoHyperlink,
+          video.getWikiHyperlink(),
+          newWikiHyperlink,
+          channel.getDatabaseObject().title,
+          change.timestamp
+        ])
+      } else if (change.key === "description") {
+        descriptionChangelogValues.push([
+          videoHyperlink,
+          video.getWikiHyperlink(),
+          change.oldValue,
+          change.newValue,
+          channel.getDatabaseObject().title,
+          change.timestamp
+        ])
+      }
+    })
+  }
+
+  videoValues.push([
+    videoHyperlink,
+    video.getWikiHyperlink(),
+    video.getDatabaseObject().wikiStatus,
+    video.getDatabaseObject().videoStatus,
+    video.getDatabaseObject().publishedAt,
+    video.getDatabaseObject().duration,
+    video.getDatabaseObject().description,
+    video.getDatabaseObject().viewCount,
+    video.getDatabaseObject().likeCount,
+    video.getDatabaseObject().dislikeCount,
+    video.getDatabaseObject().commentCount
+  ])
+
+  return {
+    "videoValues": videoValues,
+    "titleChangelogValues": titleChangelogValues,
+    "descriptionChangelogValues": descriptionChangelogValues
+  }
+}
+
+/**
+ * Check all videos for YouTube status changes.
+ */
+function checkAllVideoStatuses() {
   HighQualityUtils.settings().disableYoutubeApi()
 
   const videoLimit = 50
@@ -197,41 +217,7 @@ function checkVideoStatuses() {
 
   const options = { fields: "id,videoStatus" }
   const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options).slice(videoIndex, videoIndex + videoLimit)
-
-  const videoSheet = channel.getSheet()
-  const changelogSheet = channel.getChangelogSpreadsheet().getSheet("Statuses")
-
-  // Check for status changes on each video
-  videos.forEach(video => {
-    const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
-    console.log(video.getDatabaseObject().title)
-
-    const oldStatus = video.getDatabaseObject().videoStatus
-    const currentStatus = video.getYoutubeStatus()
-
-    // If the YouTube status has changed
-    if (oldStatus !== currentStatus) {
-      console.log(`Old status: ${oldStatus}\nNew status: ${currentStatus}`)
-      video.getDatabaseObject().videoStatus = currentStatus
-      const changelogValues = [
-        videoHyperlink,
-        video.getWikiHyperlink(),
-        oldStatus,
-        currentStatus,
-        channel.getDatabaseObject().title,
-        HighQualityUtils.utils().formatDate()
-      ]
-
-      // Push the updates to the database, channel sheet, and changelog sheet
-      changelogSheet.insertValues(changelogValues)
-      changelogSheet.sort(6, false)
-      const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
-      videoSheet.updateValues([[currentStatus]], rowIndex, 4)
-      videoSheet.sort(5)
-      video.update()
-    }
-  })
-
+  videos.forEach(video => checkVideoStatus(video))
   videoIndex += videoLimit
 
   // If this is the last of the videos to update for this channel
@@ -251,54 +237,95 @@ function checkVideoStatuses() {
 }
 
 /**
- * Checks for wiki status changes.
+ * Check a video's YouTube status and update it if it's changed.
+ * @param {Video} video - The video object.
  */
-function checkWikiStatuses() {
-  HighQualityUtils.settings().disableYoutubeApi()
+function checkVideoStatus(video) {
+  console.log(`Checking video status of ${video.getDatabaseObject().title}`)
+  const oldStatus = video.getDatabaseObject().videoStatus
+  const currentStatus = video.getYoutubeStatus()
 
-  channels.forEach(channel => {
-    // Skip any channel that doesn't have a wiki
-    if (channel.getDatabaseObject().wiki === "" || channel.getDatabaseObject().wiki === "None") {
-      console.log(`Skipping ${channel.getDatabaseObject().title}`)
-      return
-    }
+  // If the YouTube status has changed
+  if (oldStatus !== currentStatus) {
+    console.log(`Old status: ${oldStatus}\nNew status: ${currentStatus}`)
+    video.getDatabaseObject().videoStatus = currentStatus
+    const channel = video.getChannel()
+    const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
+    const changelogValues = [
+      videoHyperlink,
+      video.getWikiHyperlink(),
+      oldStatus,
+      currentStatus,
+      channel.getDatabaseObject().title,
+      HighQualityUtils.utils().formatDate()
+    ]
 
-    const categoryTitle = (channel.getId() === "UCCPGE1kAoonfPsbieW41ZZA" ? "Vips" : "Rips")
-    const wikiTitles = HighQualityUtils.utils().fetchFandomCategoryMembers(channel.getDatabaseObject().wiki, categoryTitle)
-    console.log(`Found ${wikiTitles.length} documented ${channel.getDatabaseObject().title} titles`)
-
+    // Push the updates to the database, channel sheet, and changelog sheet
+    const changelogSheet = channel.getChangelogSpreadsheet().getSheet("Statuses")
+    changelogSheet.insertValues(changelogValues)
+    changelogSheet.sort(6, false)
     const videoSheet = channel.getSheet()
-    const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
+    const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
+    videoSheet.updateValues([[currentStatus]], rowIndex, 4)
+    videoSheet.sort(5)
+    video.update()
+  }
+}
 
-    const options = { fields: "id,title" }
-    const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options) // update service to allow multiple ids?
-    const videoMap = new Map(videos.map(video => {
-      const dbWikiFormattedTitle = HighQualityUtils.utils().formatFandomPageName(video.getDatabaseObject().title)
-      return [dbWikiFormattedTitle, video]
-    }))
+/**
+ * Check all channel wikis for new rip articles.
+ */
+function checkAllWikiStatuses() {
+  HighQualityUtils.settings().disableYoutubeApi()
+  channels.forEach(channel => checkChannelWikiStatuses(channel))
+}
 
-    // Check for wiki status updates on new rip articles
-    wikiTitles.forEach(wikiTitle => {
-      // If an undocumented video has been documented
-      if (videoMap.has(wikiTitle) && videoMap.get(wikiTitle).getDatabaseObject().wikiStatus !== "Documented") {
-        console.log(`Newly documented video: ${wikiTitle}`)
-        undocumentedRipsPlaylist.removeVideo(video.getId())
-        video.getDatabaseObject().wikiStatus = "Documented"
-        const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
-        videoSheet.updateValues([["Documented"]], rowIndex, 3)
-        video.update()
-      } 
-    })
+/**
+ * Check a channel wiki for new rip articles.
+ * @param {Channel} channel - The channel object.
+ */
+function checkChannelWikiStatuses(channel) {
+  // Skip any channel that doesn't have a wiki
+  if (channel.getDatabaseObject().wiki === "" || channel.getDatabaseObject().wiki === "None") {
+    console.log(`${channel.getDatabaseObject().title} doesn't have a wiki`)
+    return
+  }
+
+  const categoryTitle = (channel.getId() === "UCCPGE1kAoonfPsbieW41ZZA" ? "Vips" : "Rips")
+  const wikiTitles = HighQualityUtils.utils().fetchFandomCategoryMembers(channel.getDatabaseObject().wiki, categoryTitle)
+  console.log(`Found ${wikiTitles.length} documented ${channel.getDatabaseObject().title} titles`)
+
+  const videoSheet = channel.getSheet()
+  const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
+
+  const options = { fields: "id,title" }
+  const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options) // update service to allow multiple ids?
+  const videoMap = new Map(videos.map(video => {
+    const dbWikiFormattedTitle = HighQualityUtils.utils().formatFandomPageName(video.getDatabaseObject().title)
+    return [dbWikiFormattedTitle, video]
+  }))
+
+  // Check for wiki status updates on new rip articles
+  wikiTitles.forEach(wikiTitle => {
+    // If an undocumented video has been documented
+    if (videoMap.has(wikiTitle) && videoMap.get(wikiTitle).getDatabaseObject().wikiStatus !== "Documented") {
+      console.log(`Newly documented video: ${wikiTitle}`)
+      undocumentedRipsPlaylist.removeVideo(video.getId())
+      video.getDatabaseObject().wikiStatus = "Documented"
+      const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
+      videoSheet.updateValues([["Documented"]], rowIndex, 3)
+      video.update()
+    } 
   })
 }
 
 /**
- * Deletes and recreates project triggers.
+ * Delete and recreate project triggers.
  */
 function resetTriggers() {
   HighQualityUtils.settings().deleteTriggers()
-  ScriptApp.newTrigger('checkRecentVideos').timeBased().everyMinutes(5).create()
-  ScriptApp.newTrigger('checkVideoDetails').timeBased().everyMinutes(5).create()
-  ScriptApp.newTrigger('checkVideoStatuses').timeBased().everyMinutes(5).create()
-  ScriptApp.newTrigger('checkWikiStatuses').timeBased().everyMinutes(60).create()
+  ScriptApp.newTrigger('checkAllRecentVideos').timeBased().everyMinutes(5).create()
+  ScriptApp.newTrigger('checkAllVideoDetails').timeBased().everyMinutes(5).create()
+  ScriptApp.newTrigger('checkAllVideoStatuses').timeBased().everyMinutes(5).create()
+  ScriptApp.newTrigger('checkAllWikiStatuses').timeBased().everyMinutes(60).create()
 }
