@@ -36,11 +36,12 @@ function checkAllRecentVideos() {
 /**
  * Add a public video to the database if it's missing.
  * @param {Video} video - The video object.
+ * @return {Video, Array[Object]} An array containing the video and the video values.
  */
 function checkNewVideo(video) {
   if (video.getDatabaseObject() !== undefined) {
     console.log(`${video.getId()} has already been added to the database`)
-    return
+    return [video, undefined]
   }
 
   console.log(`New video: ${video.getId()}`)
@@ -51,13 +52,14 @@ function checkNewVideo(video) {
     undocumentedRipsPlaylist.addVideo(video.getId())
   }
 
+  video.createDatabaseObject()
   const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
   const videoValues = [[
     videoHyperlink,
     video.getWikiHyperlink(),
     video.getDatabaseObject().wikiStatus,
     video.getDatabaseObject().videoStatus,
-    video.getDatabaseObject().publishedAt,
+    HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
     video.getDatabaseObject().duration,
     video.getDatabaseObject().description,
     video.getDatabaseObject().viewCount,
@@ -66,7 +68,6 @@ function checkNewVideo(video) {
     video.getDatabaseObject().commentCount
   ]]
   channel.getSheet().insertValues(videoValues).sort(5, false)
-  video.createDatabaseObject()
   return [video, videoValues]
 }
 
@@ -102,24 +103,30 @@ function checkAllVideoDetails() {
 
   // Push the updates to the database, channel sheet, and changelog sheet
   if (titleChangelogValues.length > 0) {
+    console.log(`Inserting ${titleChangelogValues.length} rows to title changelog`)
     const titleChangelogSheet = channel.getChangelogSpreadsheet().getSheet("Titles")
     titleChangelogSheet.insertValues(titleChangelogValues).sort(5, false)
   }
 
   if (descriptionChangelogValues.length > 0) {
+    console.log(`Inserting ${descriptionChangelogValues.length} rows to description changelog`)
     const descriptionChangelogSheet = channel.getChangelogSpreadsheet().getSheet("Descriptions")
     descriptionChangelogSheet.insertValues(descriptionChangelogValues).sort(6, false)
   }
 
   if (videoValues.length > 0) {
     const videoSheet = channel.getSheet()
-    const mostRecentVideo = videos[0]
-    const rowIndex = videoSheet.getRowIndexOfValue(mostRecentVideo.getId())
-    // TODO fix the below issues
-    //      - rowIndex is getting set to the wrong row because videos[0] isn't necessarily the most recent video
-    //      - deleted/unlisted/private/unavailable videos may be overwritten because they aren't in the videos variable (change getByFilter())
-    //      - updateValues() is sometimes inserting rows and I don't know why
-    videoSheet.updateValues(videoValues, rowIndex).sort(5, false)
+    const colAValues = videoSheet.getOriginalObject().getRange("A2:A").getValues()
+    const rowIndexMap = new Map(colAValues.map((colAValues, index) => [colAValues[0], index + 2]))
+
+    // This would be a bit faster if a single range was updated in one shot. However, that would be more complicated
+    // to implement because removed videos don't appear in the videos array but do appear in sheet rows.
+    videos.forEach((video, index) => {
+      const rowValues = [videoValues[index]]
+      const rowIndex = rowIndexMap.get(video.getId())
+      console.log(`Updating video sheet row ${rowIndex} with ID ${video.getId()}`)
+      videoSheet.updateValues(rowValues, rowIndex)
+    })
   }
 
   HighQualityUtils.videos().updateAll(videos)
@@ -193,7 +200,7 @@ function getVideoDetails(video) {
     video.getWikiHyperlink(),
     video.getDatabaseObject().wikiStatus,
     video.getDatabaseObject().videoStatus,
-    video.getDatabaseObject().publishedAt,
+    HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
     video.getDatabaseObject().duration,
     video.getDatabaseObject().description,
     video.getDatabaseObject().viewCount,
