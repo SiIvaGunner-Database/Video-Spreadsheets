@@ -1,10 +1,11 @@
 const scriptProperties = PropertiesService.getScriptProperties()
 
 // IMPORTANT! Enable dev mode when testing.
-// HighQualityUtils.settings().enableDevMode()
+HighQualityUtils.settings().enableDevMode()
 HighQualityUtils.settings().setAuthToken(scriptProperties)
 
 // Get channels from database
+console.log("Fetching channels from database")
 const channels = HighQualityUtils.channels().getAll({ "channelStatus": "Public" })
 const spreadsheetBotId = HighQualityUtils.settings().getBotId()
 
@@ -36,12 +37,11 @@ function checkAllRecentVideos() {
 /**
  * Add a public video to the database if it's missing.
  * @param {Video} video - The video object.
- * @return {Video, Array[Object]} An array containing the video and the video values.
  */
 function checkNewVideo(video) {
   if (video.getDatabaseObject() !== undefined) {
     console.log(`${video.getId()} has already been added to the database`)
-    return [video, undefined]
+    return
   }
 
   console.log(`New video: ${video.getId()}`)
@@ -68,27 +68,27 @@ function checkNewVideo(video) {
     video.getDatabaseObject().commentCount
   ]]
   channel.getSheet().insertValues(videoValues).sort(5, false)
-  return [video, videoValues]
 }
 
 /**
  * Check all channels for video details and statistics updates.
  */
 function checkAllVideoDetails() {
-  const videoLimit = 500
+  const videoLimit = 1000
   const channelIndexKey = "checkVideoDetails.channelIndex"
-  const pageTokenKey = "checkVideoDetails.pageToken"
+  const pageNumberKey = "checkVideoDetails.pageNumber"
 
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
-  const pageToken = scriptProperties.getProperty(pageTokenKey)
+  let pageNumber = Number(scriptProperties.getProperty(pageNumberKey)) + 1
   const channel = channels[channelIndex]
   console.log(`Checking ${channel.getDatabaseObject().title} video details`)
 
-  const options = {
-    "limit": videoLimit,
-    "pageToken": pageToken
+  const parameters = {
+    "videoStatus__in": "Public,Unlisted",
+    "channel": channel.getId(),
+    "page": pageNumber
   }
-  const [videos, nextPageToken] = HighQualityUtils.videos().getByChannelId(channel.getId(), options)
+  const videos = HighQualityUtils.videos().getAll(parameters, videoLimit)
   const videoValues = []
   const titleChangelogValues = []
   const descriptionChangelogValues = []
@@ -118,28 +118,43 @@ function checkAllVideoDetails() {
     const videoSheet = channel.getSheet()
     const colAValues = videoSheet.getOriginalObject().getRange("A2:A").getValues()
     const rowIndexMap = new Map(colAValues.map((colAValues, index) => [colAValues[0], index + 2]))
+    const valuesToInsert = []
+    console.log(`${colAValues.length} videos currently listed in video sheet`)
 
-    // This would be a bit faster if a single range was updated in one shot. However, that would be more complicated
-    // to implement because removed videos don't appear in the videos array but do appear in sheet rows.
     videos.forEach((video, index) => {
       const rowValues = [videoValues[index]]
       const rowIndex = rowIndexMap.get(video.getId())
-      console.log(`Updating video sheet row ${rowIndex} with ID ${video.getId()}`)
-      videoSheet.updateValues(rowValues, rowIndex)
+
+      if (rowIndex === undefined) {
+        console.log(`No row found for ID ${video.getId()}`)
+        valuesToInsert.push(rowValues[0])
+      } else {
+        console.log(`Updating row ${rowIndex} with ID ${video.getId()}`)
+        videoSheet.updateValues(rowValues, rowIndex)
+      }
     })
+
+    if (valuesToInsert.length > 0) {
+      console.log(`Inserting ${valuesToInsert.length} missing rows into sheet`)
+      videoSheet.insertValues(valuesToInsert)
+      videoSheet.sort(5, false)
+    }
   }
 
+  console.log(`Updating database content`)
   HighQualityUtils.videos().updateAll(videos)
 
   // If there are no more videos and this is the last channel to update
-  if (nextPageToken === undefined && channelIndex >= channels.length - 1) {
+  if (videos.length < videoLimit && channelIndex >= channels.length - 1) {
     channelIndex = 0
-  } else {
+    pageNumber = 1
+  } else if (videos.length < videoLimit) {
     channelIndex++
+    pageNumber = 1
   }
 
   scriptProperties.setProperty(channelIndexKey, channelIndex)
-  scriptProperties.setProperty(pageTokenKey, nextPageToken | "")
+  scriptProperties.setProperty(pageNumberKey, pageNumber)
 }
 
 /**
@@ -148,21 +163,11 @@ function checkAllVideoDetails() {
  * @return {Object} An object containing three arrays: { videoValues: Array[String|Number|Date]; titleChangelogValues: Array[String|Date]; descriptionChangelogValues: Array[String|Date]; }
  */
 function getVideoDetails(video) {
-  if (video.getDatabaseObject() === undefined) {
-    console.log(`Adding ${video.getId()} to database`)
-    const [newVideo, newVideoValues] = checkNewVideo(video)
-    return {
-      "videoValues": newVideoValues,
-      "titleChangelogValues": [],
-      "descriptionChangelogValues": []
-    }
-  }
-
   const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
   const videoValues = []
   const titleChangelogValues = []
   const descriptionChangelogValues = []
-  console.log(video.getDatabaseObject().title)
+  console.log(`Fetching video details for ID ${video.getId()}`)
 
   // If any YouTube metadata has changed
   if (video.hasChanges() === true) {
@@ -173,12 +178,12 @@ function getVideoDetails(video) {
       console.log(change.message)
 
       if (change.key === "title") {
-        const newWikiHyperlink = HighQualityUtils.utils().formatFandomHyperlink(change.newValue, channel.getDatabaseObject().wiki)
+        const newWikiHyperlink = HighQualityUtils.utils().formatFandomHyperlink(change.newValue, video.getChannel().getDatabaseObject().wiki)
         titleChangelogValues.push([
           videoHyperlink,
           video.getWikiHyperlink(),
           newWikiHyperlink,
-          channel.getDatabaseObject().title,
+          video.getChannel().getDatabaseObject().title,
           change.timestamp
         ])
       } else if (change.key === "description") {
@@ -187,7 +192,7 @@ function getVideoDetails(video) {
           video.getWikiHyperlink(),
           change.oldValue,
           change.newValue,
-          channel.getDatabaseObject().title,
+          video.getChannel().getDatabaseObject().title,
           change.timestamp
         ])
       }
@@ -327,6 +332,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
     // If an undocumented video has been documented
     if (videoMap.has(wikiTitle) === true && videoMap.get(wikiTitle).getDatabaseObject().wikiStatus !== "Documented") {
       console.log(`Newly documented video: ${wikiTitle}`)
+      const video = videoMap.get(wikiTitle)
       undocumentedRipsPlaylist.removeVideo(video.getId())
       video.getDatabaseObject().wikiStatus = "Documented"
       const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
