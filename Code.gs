@@ -17,9 +17,16 @@ function checkAllRecentVideos() {
 
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
   const channel = channels[channelIndex]
-  console.log(`Checking recent ${channel.getDatabaseObject().title} videos`)
+  console.log(`Checking recent ${channel.getDatabaseObject().title} [${channelIndex}] videos`)
 
-  const options = { "limit": 50 }
+  const options = {
+    "youtubeLimit": 50,
+    "databaseLimit": 1000,
+    "parameters": {
+      "fields": "id",
+      "ordering": "-publishedAt"
+    }
+  }
   const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options)
   console.log(videos.length + " recent videos")
   videos.forEach(video => checkNewVideo(video))
@@ -57,8 +64,8 @@ function checkNewVideo(video) {
   const videoValues = [[
     videoHyperlink,
     video.getWikiHyperlink(),
-    video.getDatabaseObject().wikiStatus,
-    video.getDatabaseObject().videoStatus,
+    "Undocumented", // Wiki status
+    "Public", // YouTube status
     HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
     video.getDatabaseObject().duration,
     video.getDatabaseObject().description,
@@ -81,7 +88,7 @@ function checkAllVideoDetails() {
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
   let pageNumber = Number(scriptProperties.getProperty(pageNumberKey)) + 1
   const channel = channels[channelIndex]
-  console.log(`Checking ${channel.getDatabaseObject().title} video details`)
+  console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] video details`)
 
   const parameters = {
     "videoStatus__in": "Public,Unlisted",
@@ -147,10 +154,10 @@ function checkAllVideoDetails() {
   // If there are no more videos and this is the last channel to update
   if (videos.length < videoLimit && channelIndex >= channels.length - 1) {
     channelIndex = 0
-    pageNumber = 1
+    pageNumber = 0
   } else if (videos.length < videoLimit) {
     channelIndex++
-    pageNumber = 1
+    pageNumber = 0
   }
 
   scriptProperties.setProperty(channelIndexKey, channelIndex)
@@ -233,13 +240,13 @@ function checkAllVideoStatuses() {
 
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
   let videoIndex = Number(scriptProperties.getProperty(videoIndexKey))
+  const endVideoIndex = videoIndex + videoLimit
   const channel = channels[channelIndex]
-  console.log(`Checking ${channel.getDatabaseObject().title} video statuses`)
-
-  const options = { fields: "id,videoStatus" }
-  const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options).slice(videoIndex, videoIndex + videoLimit)
+  console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] video statuses ${videoIndex} to ${endVideoIndex}`)
+  const options = { "parameters": { "fields": "id,title,videoStatus" } }
+  const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options).slice(videoIndex, endVideoIndex)
   videos.forEach(video => checkVideoStatus(video))
-  videoIndex += videoLimit
+  videoIndex = endVideoIndex
 
   // If this is the last of the videos to update for this channel
   if (videoIndex >= videos.length - 1) {
@@ -262,7 +269,7 @@ function checkAllVideoStatuses() {
  * @param {Video} video - The video object.
  */
 function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24")) {
-  console.log(`Checking video status of ${video.getDatabaseObject().title}`)
+  console.log(`Checking video status for ID "${video.getId()}"`)
   const oldStatus = video.getDatabaseObject().videoStatus
   const currentStatus = video.getYoutubeStatus()
 
@@ -320,7 +327,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
   const videoSheet = channel.getSheet()
   const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
 
-  const options = { fields: "id,title" }
+  const options = { "parameters": { "fields": "id,title,wikiStatus" } }
   const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options)
   const videoMap = new Map(videos.map(video => {
     const dbWikiFormattedTitle = HighQualityUtils.utils().formatFandomPageName(video.getDatabaseObject().title)
@@ -338,7 +345,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
       const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
       videoSheet.updateValues([["Documented"]], rowIndex, 3)
       video.update()
-    } 
+    }
   })
 }
 
@@ -350,5 +357,6 @@ function resetTriggers() {
   ScriptApp.newTrigger('checkAllRecentVideos').timeBased().everyMinutes(5).create()
   ScriptApp.newTrigger('checkAllVideoDetails').timeBased().everyMinutes(5).create()
   ScriptApp.newTrigger('checkAllVideoStatuses').timeBased().everyMinutes(5).create()
-  ScriptApp.newTrigger('checkAllWikiStatuses').timeBased().everyMinutes(60).create()
+  ScriptApp.newTrigger('checkAllWikiStatuses').timeBased().everyHours(1).create()
+  console.log("All project triggers have been reset to their default times")
 }
