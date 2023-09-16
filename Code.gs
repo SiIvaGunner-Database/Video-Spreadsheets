@@ -55,7 +55,7 @@ function checkNewVideo(video) {
   const channel = video.getChannel()
   const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
 
-  if (undocumentedRipsPlaylist !== undefined) {
+  if (undocumentedRipsPlaylist !== undefined && channel.getOriginalObject().wiki !== "") {
     undocumentedRipsPlaylist.addVideo(video.getId())
   }
 
@@ -240,16 +240,23 @@ function checkAllVideoStatuses() {
 
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
   let videoIndex = Number(scriptProperties.getProperty(videoIndexKey))
+
+  if (isSheetLocked(channelIndexKey, channelIndex) === true) {
+    console.warn("Conflicting scripts running. Ending current execution.")
+  }
+
   const endVideoIndex = videoIndex + videoLimit
   const channel = channels[channelIndex]
   console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] video statuses ${videoIndex} to ${endVideoIndex}`)
-  const options = { "parameters": { "fields": "id,title,videoStatus" } }
-  const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options).slice(videoIndex, endVideoIndex)
-  videos.forEach(video => checkVideoStatus(video))
+
+  const options = { "parameters": { "fields": "id,title,channel,videoStatus" } }
+  const [allVideos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options)
+  const videosToUpdate = allVideos.slice(videoIndex, endVideoIndex)
+  videosToUpdate.forEach(video => checkVideoStatus(video))
   videoIndex = endVideoIndex
 
   // If this is the last of the videos to update for this channel
-  if (videoIndex >= videos.length - 1) {
+  if (videoIndex >= allVideos.length - 1) {
     videoIndex = 0
 
     // If this is the last of the channels to update
@@ -279,14 +286,14 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
     video.getDatabaseObject().videoStatus = currentStatus
     const channel = video.getChannel()
     const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
-    const changelogValues = [
+    const changelogValues = [[
       videoHyperlink,
       video.getWikiHyperlink(),
       oldStatus,
       currentStatus,
       channel.getDatabaseObject().title,
       HighQualityUtils.utils().formatDate()
-    ]
+    ]]
 
     // Push the updates to the database, channel sheet, and changelog sheet
     const changelogSheet = channel.getChangelogSpreadsheet().getSheet("Statuses")
@@ -314,7 +321,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
   HighQualityUtils.settings().disableYoutubeApi()
 
   // Skip any channel that doesn't have a wiki
-  if (channel.getDatabaseObject().wiki === "" || channel.getDatabaseObject().wiki === "None") {
+  if (channel.getDatabaseObject().wiki === "") {
     console.log(`${channel.getDatabaseObject().title} doesn't have a wiki`)
     return
   }
@@ -350,12 +357,33 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
 }
 
 /**
+ * Check whether or not the specified channel videos sheet is being used by another process. Experimental.
+ * @return {Boolean} Whether or not the given sheet is locked.
+ */
+function isSheetLocked(indexKeyToIgnore, channelIndex) {
+  const indexKeys = ["checkRecentVideos.channelIndex", "checkVideoDetails.channelIndex", "checkVideoStatuses.channelIndex"]
+  const indexNumbers = []
+
+  indexKeys.forEach(key => {
+    if (key !== indexKeyToIgnore) {
+      indexNumbers.push(Number(scriptProperties.getProperty(key)))
+    }
+  })
+
+  return indexNumbers.includes(channelIndex)
+}
+
+/**
  * Delete and recreate project triggers.
  */
 function resetTriggers() {
   HighQualityUtils.settings().deleteTriggers()
   ScriptApp.newTrigger('checkAllRecentVideos').timeBased().everyMinutes(5).create()
+  console.log("Waiting one minute...")
+  Utilities.sleep(60000)
   ScriptApp.newTrigger('checkAllVideoDetails').timeBased().everyMinutes(5).create()
+  console.log("Waiting two minutes...")
+  Utilities.sleep(120000)
   ScriptApp.newTrigger('checkAllVideoStatuses').timeBased().everyMinutes(5).create()
   ScriptApp.newTrigger('checkAllWikiStatuses').timeBased().everyHours(1).create()
   console.log("All project triggers have been reset to their default times")
