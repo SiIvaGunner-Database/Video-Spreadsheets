@@ -3,6 +3,7 @@ const scriptProperties = PropertiesService.getScriptProperties()
 // IMPORTANT! Enable dev mode when testing.
 HighQualityUtils.settings().enableDevMode()
 HighQualityUtils.settings().setAuthToken(scriptProperties)
+HighQualityUtils.settings().disableYoutubeApi()
 
 // Get channels from database
 console.log("Fetching channels from database")
@@ -13,8 +14,9 @@ const spreadsheetBotId = HighQualityUtils.settings().getBotId()
  * Check all channels for newly uploaded rips.
  */
 function checkAllRecentVideos() {
-  const channelIndexKey = "checkRecentVideos.channelIndex"
+  HighQualityUtils.settings().enableYoutubeApi()
 
+  const channelIndexKey = "checkRecentVideos.channelIndex"
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
   const channel = channels[channelIndex]
   console.log(`Checking recent ${channel.getDatabaseObject().title} [${channelIndex}] videos`)
@@ -27,7 +29,7 @@ function checkAllRecentVideos() {
       "ordering": "-publishedAt"
     }
   }
-  const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options)
+  const [videos] = channel.getVideos(options)
   console.log(videos.length + " recent videos")
   videos.forEach(video => checkNewVideo(video))
 
@@ -55,7 +57,7 @@ function checkNewVideo(video) {
   const channel = video.getChannel()
   const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
 
-  if (undocumentedRipsPlaylist !== undefined && channel.getOriginalObject().wiki !== "") {
+  if (undocumentedRipsPlaylist !== undefined) {
     undocumentedRipsPlaylist.addVideo(video.getId())
   }
 
@@ -81,6 +83,8 @@ function checkNewVideo(video) {
  * Check all channels for video details and statistics updates.
  */
 function checkAllVideoDetails() {
+  HighQualityUtils.settings().enableYoutubeApi()
+
   const videoLimit = 1000
   const channelIndexKey = "checkVideoDetails.channelIndex"
   const pageNumberKey = "checkVideoDetails.pageNumber"
@@ -89,6 +93,15 @@ function checkAllVideoDetails() {
   let pageNumber = Number(scriptProperties.getProperty(pageNumberKey)) + 1
   const channel = channels[channelIndex]
   console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] video details`)
+
+  // For now, videos().getAll() is used instead of channel.getVideos() because it doesn't fetch any extraneous database or youtube videos.
+  // In the future, I may want to use a YouTube pageToken instead of the database API page number, but I will have to fix getByFilter() first.
+  // const options = {
+  //   "pageToken": pageToken,
+  //   "limit": videoLimit,
+  //   "parameters": { "videoStatus__in": "Public,Unlisted" }
+  // }
+  // const [videos] = channel.getVideos(options)
 
   const parameters = {
     "videoStatus__in": "Public,Unlisted",
@@ -232,8 +245,6 @@ function getVideoDetails(video) {
  * Check all videos for YouTube status changes.
  */
 function checkAllVideoStatuses() {
-  HighQualityUtils.settings().disableYoutubeApi()
-
   const videoLimit = 50
   const channelIndexKey = "checkVideoStatuses.channelIndex"
   const videoIndexKey = "checkVideoStatuses.videoIndex"
@@ -250,7 +261,7 @@ function checkAllVideoStatuses() {
   console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] video statuses ${videoIndex} to ${endVideoIndex}`)
 
   const options = { "parameters": { "fields": "id,title,channel,videoStatus" } }
-  const [allVideos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options)
+  const [allVideos] = channel.getVideos(options)
   const videosToUpdate = allVideos.slice(videoIndex, endVideoIndex)
   videosToUpdate.forEach(video => checkVideoStatus(video))
   videoIndex = endVideoIndex
@@ -309,7 +320,6 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
  * Check all channel wikis for new rip articles.
  */
 function checkAllWikiStatuses() {
-  HighQualityUtils.settings().disableYoutubeApi()
   channels.forEach(channel => checkChannelWikiStatuses(channel))
 }
 
@@ -318,8 +328,6 @@ function checkAllWikiStatuses() {
  * @param {Channel} channel - The channel object.
  */
 function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById("UCIXM2qZRG9o4AFmEsKZUIvQ")) {
-  HighQualityUtils.settings().disableYoutubeApi()
-
   // Skip any channel that doesn't have a wiki
   if (channel.getDatabaseObject().wiki === "") {
     console.log(`${channel.getDatabaseObject().title} doesn't have a wiki`)
@@ -335,7 +343,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
   const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
 
   const options = { "parameters": { "fields": "id,title,wikiStatus" } }
-  const [videos] = HighQualityUtils.videos().getByChannelId(channel.getId(), options)
+  const [videos] = channel.getVideos(options)
   const videoMap = new Map(videos.map(video => {
     const dbWikiFormattedTitle = HighQualityUtils.utils().formatFandomPageName(video.getDatabaseObject().title)
     return [dbWikiFormattedTitle, video]
@@ -347,12 +355,89 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
     if (videoMap.has(wikiTitle) === true && videoMap.get(wikiTitle).getDatabaseObject().wikiStatus !== "Documented") {
       console.log(`Newly documented video: ${wikiTitle}`)
       const video = videoMap.get(wikiTitle)
-      undocumentedRipsPlaylist.removeVideo(video.getId())
+
+      if (undocumentedRipsPlaylist !== undefined) {
+        undocumentedRipsPlaylist.removeVideo(video.getId())
+      }
+
       video.getDatabaseObject().wikiStatus = "Documented"
       const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
       videoSheet.updateValues([["Documented"]], rowIndex, 3)
       video.update()
     }
+  })
+}
+
+/**
+ * Check for any duplicated video IDs on every channel videos sheet.
+ */
+function checkForDuplicateVideos() {
+  channels.forEach(channel => {
+    console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] for duplicate videos`)
+    const sheet = channel.getSheet()
+    const videoIds = sheet.getValues("A:A")
+    const videoIdMap = new Map()
+
+    videoIds.forEach(videoId => {
+      videoId = videoId[0]
+
+      if (videoIdMap.has(videoId) === true) {
+        console.warn(`Duplicate video with ID "${videoId}" found on sheet with ID "${sheet.getId()}"`)
+      } else {
+        videoIdMap.set(videoId, videoId)
+      }
+    })
+  })
+}
+
+/**
+ * Check for any missing video IDs on every channel videos sheet.
+ */
+function checkForMissingVideos() {
+  channels.forEach(channel => {
+    console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] for missing sheet videos`)
+    const parameters = {
+      "fields": "id",
+      "channel": channel.getId()
+    }
+    const videos = HighQualityUtils.videos().getAll(parameters)
+    const sheet = channel.getSheet()
+    const sheetVideoIds = sheet.getValues("A:A")
+    const sheetVideoIdMap = new Map(sheetVideoIds.map(videoId => [videoId[0], videoId[0]]))
+
+    videos.forEach(video => {
+      if (sheetVideoIdMap.has(video.getId()) === false) {
+        console.warn(`Video with ID "${video.getId()}" is missing from sheet with ID "${sheet.getId()}"`)
+      }
+    })
+  })
+}
+
+/**
+ * Check for any inconsistencies in every undocumented rips playlist.
+ */
+function checkUndocumentedPlaylists() {
+  HighQualityUtils.settings().enableYoutubeApi()
+
+  channels.forEach(channel => {
+    console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] undocumented rips playlist`)
+    const options = { "parameters": { "fields": "id,videoStatus" } }
+    const [databaseVideos] = channel.getVideos(options)
+    const playlist = channel.getUndocumentedRipsPlaylist()
+    const [playlistVideos] = playlist.getVideos(options)
+    const playlistVideoIdMap = new Map(playlistVideos.map(video => [video.getId(), video]))
+
+    databaseVideos.forEach(video => {
+      if (video.getDatabaseObject().videoStatus === "Undocumented" && playlistVideoIdMap.has(video.getId()) === false) {
+        console.warn(`Undocumented video with ID "${video.getId()}" is missing from playlist with ID "${playlist.getId()}"`)
+      }
+    })
+
+    playlistVideos.forEach(video => {
+      if (video.getDatabaseObject().videoStatus === "Documented") {
+        console.warn(`Documented video with ID "${video.getId()}" is in playlist with ID "${playlist.getId()}"`)
+      }
+    })
   })
 }
 
@@ -378,13 +463,13 @@ function isSheetLocked(indexKeyToIgnore, channelIndex) {
  */
 function resetTriggers() {
   HighQualityUtils.settings().deleteTriggers()
-  ScriptApp.newTrigger('checkAllRecentVideos').timeBased().everyMinutes(5).create()
+  ScriptApp.newTrigger('checkAllRecentVideos').timeBased().everyMinutes(10).create()
   console.log("Waiting one minute...")
   Utilities.sleep(60000)
-  ScriptApp.newTrigger('checkAllVideoDetails').timeBased().everyMinutes(5).create()
+  ScriptApp.newTrigger('checkAllVideoDetails').timeBased().everyMinutes(10).create()
   console.log("Waiting two minutes...")
   Utilities.sleep(120000)
-  ScriptApp.newTrigger('checkAllVideoStatuses').timeBased().everyMinutes(5).create()
-  ScriptApp.newTrigger('checkAllWikiStatuses').timeBased().everyHours(1).create()
+  ScriptApp.newTrigger('checkAllVideoStatuses').timeBased().everyHours(1).create()
+  ScriptApp.newTrigger('checkAllWikiStatuses').timeBased().everyHours(4).create()
   console.log("All project triggers have been reset to their default times")
 }
