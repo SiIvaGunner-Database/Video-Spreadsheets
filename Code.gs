@@ -380,7 +380,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
  */
 function checkForDuplicateVideos() {
   channels.forEach(channel => {
-    console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] for duplicate videos`)
+    console.log(`Checking ${channel.getDatabaseObject().title} for duplicate videos`)
     const sheet = channel.getSheet()
     const videoIds = sheet.getValues("A:A")
     const videoIdMap = new Map()
@@ -389,7 +389,7 @@ function checkForDuplicateVideos() {
       videoId = videoId[0]
 
       if (videoIdMap.has(videoId) === true) {
-        console.warn(`Duplicate video with ID "${videoId}" found on sheet with ID "${sheet.getId()}"`)
+        console.warn(`Duplicate video with ID "${videoId}" found on spreadsheet with ID "${sheet.getSpreadsheet().getId()}"`)
       } else {
         videoIdMap.set(videoId, videoId)
       }
@@ -402,19 +402,27 @@ function checkForDuplicateVideos() {
  */
 function checkForMissingVideos() {
   channels.forEach(channel => {
-    console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] for missing sheet videos`)
+    console.log(`Checking ${channel.getDatabaseObject().title} for missing sheet videos`)
     const parameters = {
       "fields": "id",
       "channel": channel.getId()
     }
-    const videos = HighQualityUtils.videos().getAll(parameters)
+    const databaseVideos = HighQualityUtils.videos().getAll(parameters)
+    const databaseVideoMap = new Map(databaseVideos.map(video => [video.getId(), video]))
     const sheet = channel.getSheet()
     const sheetVideoIds = sheet.getValues("A:A")
     const sheetVideoIdMap = new Map(sheetVideoIds.map(videoId => [videoId[0], videoId[0]]))
+    console.log(`Sheet videos: ${sheetVideoIds.length}\nDatabase videos: ${databaseVideos.length}`)
 
-    videos.forEach(video => {
+    databaseVideos.forEach(video => {
       if (sheetVideoIdMap.has(video.getId()) === false) {
-        console.warn(`Video with ID "${video.getId()}" is missing from sheet with ID "${sheet.getId()}"`)
+        console.warn(`Video with ID "${video.getId()}" is missing from spreadsheet with ID "${sheet.getSpreadsheet().getId()}"`)
+      }
+    })
+
+    sheetVideoIds.forEach(([videoId], index) => {
+      if (databaseVideoMap.has(videoId) === false) {
+        console.warn(`Video with ID "${videoId}" on row ${index + 2} is missing from database`)
       }
     })
   })
@@ -424,24 +432,33 @@ function checkForMissingVideos() {
  * Check for any inconsistencies in every undocumented rips playlist.
  */
 function checkUndocumentedPlaylists() {
-  HighQualityUtils.settings().enableYoutubeApi()
-
   channels.forEach(channel => {
-    console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] undocumented rips playlist`)
-    const options = { "parameters": { "fields": "id,videoStatus" } }
-    const [databaseVideos] = channel.getVideos(options)
     const playlist = channel.getUndocumentedRipsPlaylist()
+
+    if (playlist === undefined) {
+      return
+    }
+
+    console.log(`Checking ${channel.getDatabaseObject().title} undocumented rips playlist`)
+    const options = { "parameters": { "fields": "id,wikiStatus" } }
+    const [databaseVideos] = channel.getVideos(options)
+    const databaseVideoIdMap = new Map(databaseVideos.map(video => [video.getId(), video]))
+    HighQualityUtils.settings().enableYoutubeApi()
     const [playlistVideos] = playlist.getVideos(options)
+    HighQualityUtils.settings().disableYoutubeApi()
     const playlistVideoIdMap = new Map(playlistVideos.map(video => [video.getId(), video]))
+    console.log(`Playlist videos: ${playlistVideos.length}\nDatabase videos: ${databaseVideos.length}`)
 
     databaseVideos.forEach(video => {
-      if (video.getDatabaseObject().videoStatus === "Undocumented" && playlistVideoIdMap.has(video.getId()) === false) {
+      if (video.getDatabaseObject().wikiStatus === "Undocumented" && playlistVideoIdMap.has(video.getId()) === false) {
         console.warn(`Undocumented video with ID "${video.getId()}" is missing from playlist with ID "${playlist.getId()}"`)
       }
     })
 
     playlistVideos.forEach(video => {
-      if (video.getDatabaseObject().videoStatus === "Documented") {
+      if (databaseVideoIdMap.has(video.getId()) === false) {
+        console.warn(`Unknown video with ID "${video.getId()}" is in playlist with ID "${playlist.getId()}"`)
+      } else if (databaseVideoIdMap.get(video.getId()).getDatabaseObject().wikiStatus === "Documented") {
         console.warn(`Documented video with ID "${video.getId()}" is in playlist with ID "${playlist.getId()}"`)
       }
     })
