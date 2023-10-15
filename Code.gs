@@ -2,8 +2,7 @@ const scriptProperties = PropertiesService.getScriptProperties()
 
 // IMPORTANT! Enable dev mode when testing.
 HighQualityUtils.settings().enableDevMode()
-HighQualityUtils.settings().setAuthToken(scriptProperties)
-HighQualityUtils.settings().disableYoutubeApi()
+HighQualityUtils.settings().setAuthToken(scriptProperties).disableYoutubeApi()
 
 // Get channels from database
 console.log("Fetching channels from database")
@@ -16,22 +15,30 @@ const spreadsheetBotId = HighQualityUtils.settings().getBotId()
 function checkAllRecentVideos() {
   HighQualityUtils.settings().enableYoutubeApi()
 
+  const bigThreeChannelIds = ["UC9ecwl3FTG66jIKA9JRDtmg", "UCCPGE1kAoonfPsbieW41ZZA", "UCIXM2qZRG9o4AFmEsKZUIvQ"]
   const channelIndexKey = "checkRecentVideos.channelIndex"
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
-  const channel = channels[channelIndex]
-  console.log(`Checking recent ${channel.getDatabaseObject().title} [${channelIndex}] videos`)
 
-  const options = {
-    "youtubeLimit": 50,
-    "databaseLimit": 1000,
-    "parameters": {
-      "fields": "id",
-      "ordering": "-publishedAt"
+  // Check three or four channels every time the script runs; each of the big three plus one fan channel
+  channels.forEach((channel, index) => {
+    // If it's not the channel's turn and the channel isn't part of the the big three, skip it
+    if (index !== channelIndex && bigThreeChannelIds.includes(channel.getId()) === false) {
+      return
     }
-  }
-  const [videos] = channel.getVideos(options)
-  console.log(videos.length + " recent videos")
-  videos.forEach(video => checkNewVideo(video))
+
+    console.log(`Checking recent ${channel.getDatabaseObject().title} [${index}] videos`)
+    const options = {
+      "youtubeLimit": 50,
+      "databaseLimit": 1000,
+      "parameters": {
+        "fields": "id",
+        "ordering": "-publishedAt"
+      }
+    }
+    const [videos] = channel.getVideos(options)
+    console.log(videos.length + " recent videos")
+    videos.forEach(video => checkNewVideo(video))
+  })
 
   // If this is the last of the videos to update for this channel
   if (channelIndex >= channels.length - 1) {
