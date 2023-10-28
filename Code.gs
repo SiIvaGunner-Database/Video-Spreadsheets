@@ -1,7 +1,7 @@
 const scriptProperties = PropertiesService.getScriptProperties()
 
 // IMPORTANT! Enable dev mode when testing.
-HighQualityUtils.settings().enableDevMode()
+// HighQualityUtils.settings().enableDevMode()
 HighQualityUtils.settings().setAuthToken(scriptProperties).disableYoutubeApi()
 
 // Get channels from database
