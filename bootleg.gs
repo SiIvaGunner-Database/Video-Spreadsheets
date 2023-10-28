@@ -21,7 +21,7 @@ var channels = [["How to properly clean your metal computer", "UCRPj5iCNYgvUMBq8
                 ["HiipaSpooker", "UC2wQUZ0srgIRRRxwXrttRxw"],
                 ["iascas", "UCsuMYmeXXW97EsmfhPRTBBA"],
                 ["Jazva Sketcher", "UC5wZLii1wRuDwyK0h2GUMcQ"],
-                ["King of Benches", "UCRTR1EhG01bfkKJ8m95X6TA"],
+                ["KOBuS", "UCRTR1EhG01bfkKJ8m95X6TA"],
                 ["MarF41", "UCS2oUGwdEa2sqJaWIo2y3FA"],
                 ["Memesauce", "UCGeR1r5bwdEK3SIUvzTM0jA"],
                 ["Mr. High Quality", "UC3dp1-DZE0leNyXTcr1hN6w"],
@@ -63,7 +63,16 @@ var channels = [["How to properly clean your metal computer", "UCRPj5iCNYgvUMBq8
                 ["RinkaNuIIer", "UCKm8qmZsJOaCnn8O-xVM4LA"],
                 ["SiIvaGunner", "UC3QRHrJm7YlZdyi6bJjK7Ew"],
                 ["WoopaCrunner", "UCC_yBZLT9JAocDFHg0uCtiw"],
-                ["MusikFieveI", "UCfYvL53QlOIhbIq3yrTC_qA"]];
+                ["MusikFieveI", "UCfYvL53QlOIhbIq3yrTC_qA"],
+                ["JackMom300", "UCqZ7nZiDuGaK5CYELcffi8g"],
+                ["EricArchive2", "UCjx0qSyWD3edd-yYFsWrhfw"],
+                ["You take over the channel then, if you're so smart", "UCbCOETk9mXz-TZiM5Sm5lSA"],
+                ["VGMRevolution", "UC8Tv0PPL9Y3HhRWHL54koVA"],
+                ["Mamr Beta Mix", "UC3lcrgQpKC-Y5Cq3s1U5JVg"],
+                ["Tanoliado Team", "UCfXKIW7vShswHTNuc2jl6Qw"],
+                ["SiIlyGirlKamilla", "UChEObj3KvuJjDsxKnuHN3oQ"],
+                ["MiIvaWunner", "UCoTSMl5xs7bIqEimjSDEQYA"],
+                ["LockedStep", "UCFVreC-YqmctswiqIvb3nMg"]];
 
 var idCol = 1;
 var titleCol = 2;
@@ -244,8 +253,8 @@ function checkBootlegSheet()
   
   var lastUpdatedChannel = indexSheet.getRange(5, 2).getDisplayValue().replace("Last updated: ", "");
   var index = channels.findIndex(channel => {return channel[0] == lastUpdatedChannel});
-  
-  if (index == channels.length - 1)
+
+  if (index == (channels.length - 1))
     index = 0;
   else
     index++;
