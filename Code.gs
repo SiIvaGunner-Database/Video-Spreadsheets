@@ -390,6 +390,8 @@ function checkForDuplicateVideos() {
 
       if (videoIdMap.has(videoId) === true) {
         console.warn(`Duplicate video with ID "${videoId}" found on spreadsheet with ID "${sheet.getSpreadsheet().getId()}"`)
+        const rowNumber = sheet.getRowIndexOfValue(videoId)
+        sheet.getOriginalObject().deleteRow(rowNumber)
       } else {
         videoIdMap.set(videoId, videoId)
       }
@@ -440,7 +442,7 @@ function checkUndocumentedPlaylists() {
     }
 
     console.log(`Checking ${channel.getDatabaseObject().title} undocumented rips playlist`)
-    const options = { "parameters": { "fields": "id,wikiStatus" } }
+    const options = { "parameters": { "fields": "id,wikiStatus,videoStatus" } }
     const [databaseVideos] = channel.getVideos(options)
     const databaseVideoIdMap = new Map(databaseVideos.map(video => [video.getId(), video]))
     HighQualityUtils.settings().enableYoutubeApi()
@@ -451,7 +453,16 @@ function checkUndocumentedPlaylists() {
 
     databaseVideos.forEach(video => {
       if (video.getDatabaseObject().wikiStatus === "Undocumented" && playlistVideoIdMap.has(video.getId()) === false) {
-        console.warn(`Undocumented video with ID "${video.getId()}" is missing from playlist with ID "${playlist.getId()}"`)
+        const videoStatus = video.getDatabaseObject().videoStatus
+        console.warn(`Undocumented ${videoStatus} video with ID "${video.getId()}" is missing from playlist with ID "${playlist.getId()}"`)
+
+        if (videoStatus === "Public" || videoStatus === "Unlisted") {
+          try {
+            playlist.addVideo(video.getId())
+          } catch (error) {
+            console.warn(error.stack)
+          }
+        }
       }
     })
 
@@ -460,6 +471,7 @@ function checkUndocumentedPlaylists() {
         console.warn(`Unknown video with ID "${video.getId()}" is in playlist with ID "${playlist.getId()}"`)
       } else if (databaseVideoIdMap.get(video.getId()).getDatabaseObject().wikiStatus === "Documented") {
         console.warn(`Documented video with ID "${video.getId()}" is in playlist with ID "${playlist.getId()}"`)
+        playlist.removeVideo(video.getId())
       }
     })
   })
@@ -495,5 +507,7 @@ function resetTriggers() {
   Utilities.sleep(120000)
   ScriptApp.newTrigger('checkAllVideoStatuses').timeBased().everyHours(1).create()
   ScriptApp.newTrigger('checkAllWikiStatuses').timeBased().everyHours(4).create()
+  ScriptApp.newTrigger('checkForDuplicateVideos').timeBased().everyHours(1).create()
+  ScriptApp.newTrigger('checkUndocumentedPlaylists').timeBased().everyDays(1).atHour(1).create()
   console.log("All project triggers have been reset to their default times")
 }
