@@ -388,6 +388,11 @@ function checkForDuplicateVideos() {
     videoIds.forEach(videoId => {
       videoId = videoId[0]
 
+      if (videoId === "") {
+        console.warn("Skipping empty row")
+        return
+      }
+
       if (videoIdMap.has(videoId) === true) {
         console.warn(`Duplicate video with ID "${videoId}" found on spreadsheet with ID "${sheet.getSpreadsheet().getId()}"`)
         const rowNumber = sheet.getRowIndexOfValue(videoId)
@@ -492,22 +497,4 @@ function isSheetLocked(indexKeyToIgnore, channelIndex) {
   })
 
   return indexNumbers.includes(channelIndex)
-}
-
-/**
- * Delete and recreate project triggers.
- */
-function resetTriggers() {
-  HighQualityUtils.settings().deleteTriggers()
-  ScriptApp.newTrigger('checkAllRecentVideos').timeBased().everyMinutes(10).create()
-  console.log("Waiting one minute...")
-  Utilities.sleep(60000)
-  ScriptApp.newTrigger('checkAllVideoDetails').timeBased().everyMinutes(10).create()
-  console.log("Waiting two minutes...")
-  Utilities.sleep(120000)
-  ScriptApp.newTrigger('checkAllVideoStatuses').timeBased().everyHours(1).create()
-  ScriptApp.newTrigger('checkAllWikiStatuses').timeBased().everyHours(4).create()
-  ScriptApp.newTrigger('checkForDuplicateVideos').timeBased().everyHours(1).create()
-  ScriptApp.newTrigger('checkUndocumentedPlaylists').timeBased().everyDays(1).atHour(1).create()
-  console.log("All project triggers have been reset to their default times")
 }
