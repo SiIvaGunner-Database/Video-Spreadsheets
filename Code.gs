@@ -317,8 +317,15 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
     const changelogSheet = channel.getChangelogSpreadsheet().getSheet("Statuses")
     changelogSheet.insertValues(changelogValues).sort(6, false)
     const videoSheet = channel.getSheet()
-    const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
-    videoSheet.updateValues([[currentStatus]], rowIndex, 4).sort(5, false)
+
+    // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
+    try {
+      const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
+      videoSheet.updateValues([[currentStatus]], rowIndex, 4).sort(5, false)
+    } catch(error) {
+      console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
+    }
+
     video.update()
   }
 }
@@ -367,9 +374,15 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
         undocumentedRipsPlaylist.removeVideo(video.getId())
       }
 
+      // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
+      try {
+        const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
+        videoSheet.updateValues([["Documented"]], rowIndex, 3)
+      } catch(error) {
+        console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
+      }
+
       video.getDatabaseObject().wikiStatus = "Documented"
-      const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
-      videoSheet.updateValues([["Documented"]], rowIndex, 3)
       video.update()
     }
   })
