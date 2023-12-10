@@ -69,9 +69,8 @@ function checkNewVideo(video) {
   }
 
   video.createDatabaseObject()
-  const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
   const videoValues = [[
-    videoHyperlink,
+    HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
     video.getWikiHyperlink(),
     "Undocumented", // Wiki status
     "Public", // YouTube status
@@ -303,9 +302,8 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
     console.log(`Old status: ${oldStatus}\nNew status: ${currentStatus}`)
     video.getDatabaseObject().videoStatus = currentStatus
     const channel = video.getChannel()
-    const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
     const changelogValues = [[
-      videoHyperlink,
+      HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
       video.getWikiHyperlink(),
       oldStatus,
       currentStatus,
@@ -419,32 +417,45 @@ function checkForDuplicateVideos() {
 
 /**
  * Check for any missing video IDs on every channel videos sheet.
+ * As of 12/10/2023, this function's purpose is to ensure all removed videos are present in the sheets.
  */
-function checkForMissingVideos() {
+function checkForRemovedVideosMissingFromSheets() {
   channels.forEach(channel => {
     console.log(`Checking ${channel.getDatabaseObject().title} for missing sheet videos`)
     const parameters = {
-      "fields": "id",
+      "videoStatus__in": "Private,Deleted,Unavailable",
       "channel": channel.getId()
     }
     const databaseVideos = HighQualityUtils.videos().getAll(parameters)
-    const databaseVideoMap = new Map(databaseVideos.map(video => [video.getId(), video]))
     const sheet = channel.getSheet()
     const sheetVideoIds = sheet.getValues("A:A")
     const sheetVideoIdMap = new Map(sheetVideoIds.map(videoId => [videoId[0], videoId[0]]))
+    const videoValues = []
     console.log(`Sheet videos: ${sheetVideoIds.length}\nDatabase videos: ${databaseVideos.length}`)
 
     databaseVideos.forEach(video => {
       if (sheetVideoIdMap.has(video.getId()) === false) {
         console.warn(`Video with ID "${video.getId()}" is missing from spreadsheet with ID "${sheet.getSpreadsheet().getId()}"`)
+        videoValues.push([
+          HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
+          video.getWikiHyperlink(),
+          video.getDatabaseObject().wikiStatus,
+          video.getDatabaseObject().videoStatus,
+          HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
+          video.getDatabaseObject().duration,
+          video.getDatabaseObject().description,
+          video.getDatabaseObject().viewCount,
+          video.getDatabaseObject().likeCount,
+          video.getDatabaseObject().dislikeCount,
+          video.getDatabaseObject().commentCount
+        ])
       }
     })
 
-    sheetVideoIds.forEach(([videoId], index) => {
-      if (databaseVideoMap.has(videoId) === false) {
-        console.warn(`Video with ID "${videoId}" on row ${index + 2} is missing from database`)
-      }
-    })
+    if (videoValues.length > 0) {
+      console.log(`Inserting ${videoValues.length} videos into sheet`)
+      sheet.insertValues(videoValues).sort(5, false)
+    }
   })
 }
 
