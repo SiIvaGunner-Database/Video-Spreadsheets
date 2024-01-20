@@ -1,7 +1,7 @@
 const scriptProperties = PropertiesService.getScriptProperties()
 
 // IMPORTANT! Enable dev mode when testing.
-// HighQualityUtils.settings().enableDevMode()
+HighQualityUtils.settings().enableDevMode()
 HighQualityUtils.settings().setAuthToken(scriptProperties).disableYoutubeApi()
 
 // Get channels from database
@@ -69,20 +69,6 @@ function checkNewVideo(video) {
   }
 
   video.createDatabaseObject()
-  const videoValues = [[
-    HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
-    video.getWikiHyperlink(),
-    "Undocumented", // Wiki status
-    "Public", // YouTube status
-    HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
-    video.getDatabaseObject().duration,
-    video.getDatabaseObject().description,
-    video.getDatabaseObject().viewCount,
-    video.getDatabaseObject().likeCount,
-    0, // Dislike count
-    video.getDatabaseObject().commentCount
-  ]]
-  channel.getSheet().insertValues(videoValues).sort(5, false)
 }
 
 /**
@@ -140,33 +126,6 @@ function checkAllVideoDetails() {
     descriptionChangelogSheet.insertValues(descriptionChangelogValues).sort(6, false)
   }
 
-  if (videoValues.length > 0) {
-    const videoSheet = channel.getSheet()
-    const colAValues = videoSheet.getOriginalObject().getRange("A2:A").getValues()
-    const rowIndexMap = new Map(colAValues.map((colAValues, index) => [colAValues[0], index + 2]))
-    const valuesToInsert = []
-    console.log(`${colAValues.length} videos currently listed in video sheet`)
-
-    videos.forEach((video, index) => {
-      const rowValues = [videoValues[index]]
-      const rowIndex = rowIndexMap.get(video.getId())
-
-      if (rowIndex === undefined) {
-        console.log(`No row found for ID ${video.getId()}`)
-        valuesToInsert.push(rowValues[0])
-      } else {
-        console.log(`Updating row ${rowIndex} with ID ${video.getId()}`)
-        videoSheet.updateValues(rowValues, rowIndex)
-      }
-    })
-
-    if (valuesToInsert.length > 0) {
-      console.log(`Inserting ${valuesToInsert.length} missing rows into sheet`)
-      videoSheet.insertValues(valuesToInsert)
-      videoSheet.sort(5, false)
-    }
-  }
-
   console.log(`Updating database content`)
   HighQualityUtils.videos().updateAll(videos)
 
@@ -186,11 +145,10 @@ function checkAllVideoDetails() {
 /**
  * Get a video's details and statistics values as well as title and description changelog values if the values have changed.
  * @param {Video} video - The video object.
- * @return {Object} An object containing three arrays: { videoValues: Array[String|Number|Date]; titleChangelogValues: Array[String|Date]; descriptionChangelogValues: Array[String|Date]; }
+ * @return {Object} An object containing three arrays: { titleChangelogValues: Array[String|Date]; descriptionChangelogValues: Array[String|Date]; }
  */
 function getVideoDetails(video) {
   const videoHyperlink = HighQualityUtils.utils().formatYoutubeHyperlink(video.getId())
-  const videoValues = []
   const titleChangelogValues = []
   const descriptionChangelogValues = []
   console.log(`Fetching video details for ID ${video.getId()}`)
@@ -225,23 +183,7 @@ function getVideoDetails(video) {
     })
   }
 
-  video.update(false)
-  videoValues.push([
-    videoHyperlink,
-    video.getWikiHyperlink(),
-    video.getDatabaseObject().wikiStatus,
-    video.getDatabaseObject().videoStatus,
-    HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
-    video.getDatabaseObject().duration,
-    video.getDatabaseObject().description,
-    video.getDatabaseObject().viewCount,
-    video.getDatabaseObject().likeCount,
-    video.getDatabaseObject().dislikeCount,
-    video.getDatabaseObject().commentCount
-  ])
-
   return {
-    "videoValues": videoValues,
     "titleChangelogValues": titleChangelogValues,
     "descriptionChangelogValues": descriptionChangelogValues
   }
@@ -257,10 +199,6 @@ function checkAllVideoStatuses() {
 
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
   let videoIndex = Number(scriptProperties.getProperty(videoIndexKey))
-
-  if (isSheetLocked(channelIndexKey, channelIndex) === true) {
-    console.warn("Conflicting scripts running. Ending current execution.")
-  }
 
   const endVideoIndex = videoIndex + videoLimit
   const channel = channels[channelIndex]
@@ -314,16 +252,6 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
     // Push the updates to the database, channel sheet, and changelog sheet
     const changelogSheet = channel.getChangelogSpreadsheet().getSheet("Statuses")
     changelogSheet.insertValues(changelogValues).sort(6, false)
-    const videoSheet = channel.getSheet()
-
-    // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
-    try {
-      const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
-      videoSheet.updateValues([[currentStatus]], rowIndex, 4).sort(5, false)
-    } catch(error) {
-      console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
-    }
-
     video.update()
   }
 }
@@ -370,14 +298,6 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
 
       if (undocumentedRipsPlaylist !== undefined) {
         undocumentedRipsPlaylist.removeVideo(video.getId())
-      }
-
-      // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
-      try {
-        const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
-        videoSheet.updateValues([["Documented"]], rowIndex, 3)
-      } catch(error) {
-        console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
       }
 
       video.getDatabaseObject().wikiStatus = "Documented"
@@ -507,18 +427,48 @@ function checkUndocumentedPlaylists() {
 }
 
 /**
- * Check whether or not the specified channel videos sheet is being used by another process. Experimental.
- * @return {Boolean} Whether or not the given sheet is locked.
+ * Update sheet rows.
  */
-function isSheetLocked(indexKeyToIgnore, channelIndex) {
-  const indexKeys = ["checkRecentVideos.channelIndex", "checkVideoDetails.channelIndex", "checkVideoStatuses.channelIndex"]
-  const indexNumbers = []
+function updateSheets() {
+  const startTime = new Date()
+  const limit = 1000
+  const parameters = { "ordering": "-updateDate" }
+  const recentlyUpdatedVideos = HighQualityUtils.videos().getAll(parameters, limit)
 
-  indexKeys.forEach(key => {
-    if (key !== indexKeyToIgnore) {
-      indexNumbers.push(Number(scriptProperties.getProperty(key)))
+  for (const video of recentlyUpdatedVideos) {
+    if (new Date().getTime() - startTime.getTime() > 350000) {
+      console.warn("Time limit passed; ending runtime")
+      return
     }
-  })
 
-  return indexNumbers.includes(channelIndex)
+    const values = getVideoValues(video)
+    const channel = video.getChannel()
+    const sheet = channel.getSheet()
+    const rowIndex = sheet.getRowIndexOfValue(video.getId())
+
+    if (rowIndex === -1) {
+      console.log(`Inserting ${video.getId()} into ${channel.getDatabaseObject().title} sheet`)
+      sheet.insertValues(values).sort(5, false)
+      SpreadsheetApp.flush()
+    } else {
+      console.log(`Updating row ${rowIndex} with ID ${video.getId()} in ${channel.getDatabaseObject().title} sheet`)
+      sheet.updateValues(values, rowIndex)
+    }
+  }
+}
+
+function getVideoValues(video) {
+  return [[
+    HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
+    video.getWikiHyperlink(),
+    video.getDatabaseObject().wikiStatus,
+    video.getDatabaseObject().videoStatus,
+    HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
+    video.getDatabaseObject().duration,
+    video.getDatabaseObject().description,
+    video.getDatabaseObject().viewCount,
+    video.getDatabaseObject().likeCount,
+    video.getDatabaseObject().dislikeCount,
+    video.getDatabaseObject().commentCount
+  ]]
 }
