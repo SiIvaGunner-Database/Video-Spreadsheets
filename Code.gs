@@ -114,7 +114,14 @@ function checkAllVideoDetails() {
     "channel": channel.getId(),
     "page": pageNumber
   }
-  const videos = HighQualityUtils.videos().getAll(parameters, videoLimit)
+
+  let videos = []
+  try {
+    videos = HighQualityUtils.videos().getAll(parameters, videoLimit)
+  } catch (e) {
+    console.error("An error occurred during fetch from database videos API; ending runtime\n", e.stack)
+  }
+
   const videoValues = []
   const titleChangelogValues = []
   const descriptionChangelogValues = []
