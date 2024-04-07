@@ -355,6 +355,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
 
   const categoryTitle = (channel.getId() === "UCCPGE1kAoonfPsbieW41ZZA" ? "Vips" : "Rips")
   const wikiCategoryMembers = HighQualityUtils.utils().fetchFandomCategoryMembers(channel.getDatabaseObject().wiki, categoryTitle)
+  wikiCategoryMembers.push(...HighQualityUtils.utils().fetchFandomCategoryMembers(channel.getDatabaseObject().wiki, "Videos"))
   const wikiTitles = wikiCategoryMembers.map(categoryMember => categoryMember.title)
   console.log(`Found ${wikiTitles.length} documented ${channel.getDatabaseObject().title} titles`)
 
@@ -363,32 +364,41 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
 
   const options = { "parameters": { "fields": "id,title,wikiStatus" } }
   const [videos] = channel.getVideos(options)
-  const videoMap = new Map(videos.map(video => {
+  const videoMap = new Map()
+
+  videos.forEach(video => {
     const dbWikiFormattedTitle = HighQualityUtils.utils().formatFandomPageName(video.getDatabaseObject().title)
-    return [dbWikiFormattedTitle, video]
-  }))
+    const videosWithSameTitle = [video]
+
+    if (videoMap.has(dbWikiFormattedTitle) === true) {
+      videosWithSameTitle.push(...videoMap.get(dbWikiFormattedTitle))
+    }
+
+    videoMap.set(dbWikiFormattedTitle, videosWithSameTitle)
+  })
 
   // Check for wiki status updates on new rip articles
   wikiTitles.forEach(wikiTitle => {
     // If an undocumented video has been documented
-    if (videoMap.has(wikiTitle) === true && videoMap.get(wikiTitle).getDatabaseObject().wikiStatus !== "Documented") {
+    if (videoMap.has(wikiTitle) === true && videoMap.get(wikiTitle).some(video => video.getDatabaseObject().wikiStatus !== "Documented") === true) {
       console.log(`Newly documented video: ${wikiTitle}`)
-      const video = videoMap.get(wikiTitle)
 
-      if (undocumentedRipsPlaylist !== undefined) {
-        undocumentedRipsPlaylist.removeVideo(video.getId())
-      }
+      videoMap.get(wikiTitle).forEach(video => {
+        if (undocumentedRipsPlaylist !== undefined) {
+          undocumentedRipsPlaylist.removeVideo(video.getId())
+        }
 
-      // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
-      try {
-        const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
-        videoSheet.updateValues([["Documented"]], rowIndex, 3)
-      } catch(error) {
-        console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
-      }
+        // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
+        try {
+          const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
+          videoSheet.updateValues([["Documented"]], rowIndex, 3)
+        } catch(error) {
+          console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
+        }
 
-      video.getDatabaseObject().wikiStatus = "Documented"
-      video.update()
+        video.getDatabaseObject().wikiStatus = "Documented"
+        video.update()
+      })
     }
   })
 }
