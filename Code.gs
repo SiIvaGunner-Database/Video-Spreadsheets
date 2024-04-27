@@ -404,7 +404,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
 }
 
 /**
- * Check for any duplicated video IDs on every channel videos sheet.
+ * Check for and delete rows with duplicated and empty video IDs on every channel videos sheet.
  */
 function checkForDuplicateVideos() {
   channels.forEach(channel => {
@@ -412,19 +412,15 @@ function checkForDuplicateVideos() {
     const sheet = channel.getSheet()
     const videoIds = sheet.getValues("A:A")
     const videoIdMap = new Map()
+    let row = 1
 
     videoIds.forEach(videoId => {
       videoId = videoId[0]
+      row++
 
-      if (videoId === "") {
-        console.warn("Skipping empty row")
-        return
-      }
-
-      if (videoIdMap.has(videoId) === true) {
-        console.warn(`Duplicate video with ID "${videoId}" found on spreadsheet with ID "${sheet.getSpreadsheet().getId()}"`)
-        const rowNumber = sheet.getRowIndexOfValue(videoId)
-        sheet.getOriginalObject().deleteRow(rowNumber)
+      if (videoId === "" || videoIdMap.has(videoId) === true) {
+        console.warn(`Deleting duplicate row ${row} containing video ID "${videoId}"`)
+        sheet.getOriginalObject().deleteRow(row--)
       } else {
         videoIdMap.set(videoId, videoId)
       }
