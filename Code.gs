@@ -68,7 +68,15 @@ function checkNewVideo(video) {
     undocumentedRipsPlaylist.addVideo(video.getId())
   }
 
-  video.createDatabaseObject()
+  // TODO
+  const defaults = {}
+  let wikiTitle
+  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg") {
+    wikiTitle = HighQualityUtils.utils.formatFandomPageName(video.getDatabaseObject().title)
+    defaults.wikiTitle = wikiTitle
+  }
+
+  video.createDatabaseObject(defaults)
   const videoValues = [[
     HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
     video.getWikiHyperlink(),
@@ -82,6 +90,12 @@ function checkNewVideo(video) {
     0, // Dislike count
     video.getDatabaseObject().commentCount
   ]]
+
+  // TODO
+  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg" && wikiTitle !== undefined) {
+    videoValues[0].push(wikiTitle)
+  }
+
   channel.getSheet().insertValues(videoValues).sort(5, false)
 }
 
@@ -232,6 +246,13 @@ function getVideoDetails(video) {
     })
   }
 
+  // TODO
+  let wikiTitle = video.getDatabaseObject().wikiTitle
+  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg" && wikiTitle === undefined) {
+    wikiTitle = HighQualityUtils.utils.formatFandomPageName(video.getOriginalObject().title)
+    video.getDatabaseObject().wikiTitle = wikiTitle
+  }
+
   video.update(false)
   videoValues.push([
     videoHyperlink,
@@ -246,6 +267,11 @@ function getVideoDetails(video) {
     video.getDatabaseObject().dislikeCount,
     video.getDatabaseObject().commentCount
   ])
+
+  // TODO
+  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg" && wikiTitle !== undefined) {
+    videoValues[0].push(wikiTitle)
+  }
 
   return {
     "videoValues": videoValues,
