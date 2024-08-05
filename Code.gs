@@ -68,15 +68,14 @@ function checkNewVideo(video) {
     undocumentedRipsPlaylist.addVideo(video.getId())
   }
 
-  // TODO
-  const defaults = {}
-  let wikiTitle
-  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg") {
-    wikiTitle = HighQualityUtils.utils.formatFandomPageName(video.getDatabaseObject().title)
-    defaults.wikiTitle = wikiTitle
+  const videoDefaults = {}
+
+  // If the channel has a wiki, add the video's wiki title
+  if (video.getChannel().getDatabaseObject().wiki !== "") {
+    videoDefaults.wikiTitle = HighQualityUtils.utils().formatFandomPageName(video.getOriginalObject().title)
   }
 
-  video.createDatabaseObject(defaults)
+  video.createDatabaseObject(videoDefaults)
   const videoValues = [[
     HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
     video.getWikiHyperlink(),
@@ -91,9 +90,9 @@ function checkNewVideo(video) {
     video.getDatabaseObject().commentCount
   ]]
 
-  // TODO
-  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg" && wikiTitle !== undefined) {
-    videoValues[0].push(wikiTitle)
+  // If the channel is SiIvaGunner, add the video's wiki title to the sheet
+  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg") {
+    videoValues[0].push(videoDefaults.wikiTitle)
   }
 
   channel.getSheet().insertValues(videoValues).sort(5, false)
@@ -246,13 +245,6 @@ function getVideoDetails(video) {
     })
   }
 
-  // TODO
-  let wikiTitle = video.getDatabaseObject().wikiTitle
-  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg" && wikiTitle === undefined) {
-    wikiTitle = HighQualityUtils.utils.formatFandomPageName(video.getOriginalObject().title)
-    video.getDatabaseObject().wikiTitle = wikiTitle
-  }
-
   video.update(false)
   videoValues.push([
     videoHyperlink,
@@ -268,8 +260,15 @@ function getVideoDetails(video) {
     video.getDatabaseObject().commentCount
   ])
 
-  // TODO
-  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg" && wikiTitle !== undefined) {
+  let wikiTitle = video.getDatabaseObject().wikiTitle
+
+  // If the channel has a wiki and the video doesn't have a wiki title or the original title has changed, update the wiki title
+  if (video.getChannel().getDatabaseObject().wiki !== "" && (wikiTitle === "" || titleChangelogValues.length > 0)) {
+    wikiTitle = HighQualityUtils.utils().formatFandomPageName(video.getDatabaseObject().title)
+  }
+
+  // If the channel is SiIvaGunner, add the video's wiki title to the sheet
+  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg") {
     videoValues[0].push(wikiTitle)
   }
 
