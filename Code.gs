@@ -76,26 +76,30 @@ function checkNewVideo(video) {
   }
 
   video.createDatabaseObject(videoDefaults)
-  const videoValues = [[
-    HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
-    video.getWikiHyperlink(),
-    "Undocumented", // Wiki status
-    "Public", // YouTube status
-    HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
-    video.getDatabaseObject().duration,
-    video.getDatabaseObject().description,
-    video.getDatabaseObject().viewCount,
-    video.getDatabaseObject().likeCount,
-    0, // Dislike count
-    video.getDatabaseObject().commentCount
-  ]]
 
-  // If the channel is SiIvaGunner, add the video's wiki title to the sheet
-  if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg") {
-    videoValues[0].push(videoDefaults.wikiTitle)
+  // If the channel has a video sheet, insert a row for the new video
+  if (channel.hasSheet() === true) {
+    const videoValues = [[
+      HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
+      video.getWikiHyperlink(),
+      "Undocumented", // Wiki status
+      "Public", // YouTube status
+      HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
+      video.getDatabaseObject().duration,
+      video.getDatabaseObject().description,
+      video.getDatabaseObject().viewCount,
+      video.getDatabaseObject().likeCount,
+      0, // Dislike count
+      video.getDatabaseObject().commentCount
+    ]]
+
+    // If the channel is SiIvaGunner, add the video's wiki title to the sheet
+    if (video.getChannel().getId() === "UC9ecwl3FTG66jIKA9JRDtmg") {
+      videoValues[0].push(videoDefaults.wikiTitle)
+    }
+
+    channel.getSheet().insertValues(videoValues).sort(5, false)
   }
-
-  channel.getSheet().insertValues(videoValues).sort(5, false)
 }
 
 /**
@@ -160,7 +164,8 @@ function checkAllVideoDetails() {
     descriptionChangelogSheet.insertValues(descriptionChangelogValues).sort(6, false)
   }
 
-  if (videoValues.length > 0) {
+  // If the channel has a video sheet, update rows with the updated video values
+  if (videoValues.length > 0 && channel.hasSheet() === true) {
     const videoSheet = channel.getSheet()
     const colAValues = videoSheet.getOriginalObject().getRange("A2:A").getValues()
     const rowIndexMap = new Map(colAValues.map((colAValues, index) => [colAValues[0], index + 2]))
@@ -346,14 +351,18 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
     // Push the updates to the database, channel sheet, and changelog sheet
     const changelogSheet = channel.getChangelogSpreadsheet().getSheet("Statuses")
     changelogSheet.insertValues(changelogValues).sort(6, false)
-    const videoSheet = channel.getSheet()
 
-    // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
-    try {
-      const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
-      videoSheet.updateValues([[currentStatus]], rowIndex, 4).sort(5, false)
-    } catch(error) {
-      console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
+    // If the channel has a video sheet, update the row for the video
+    if (channel.hasSheet() === true) {
+      const videoSheet = channel.getSheet()
+
+      // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
+      try {
+        const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
+        videoSheet.updateValues([[currentStatus]], rowIndex, 4).sort(5, false)
+      } catch(error) {
+        console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
+      }
     }
 
     video.update()
@@ -384,7 +393,6 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
   const wikiTitles = wikiCategoryMembers.map(categoryMember => categoryMember.title)
   console.log(`Found ${wikiTitles.length} documented ${channel.getDatabaseObject().title} titles`)
 
-  const videoSheet = channel.getSheet()
   const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
 
   const options = { "parameters": { "fields": "id,title,wikiStatus" } }
@@ -413,12 +421,17 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
           undocumentedRipsPlaylist.removeVideo(video.getId())
         }
 
-        // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
-        try {
-          const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
-          videoSheet.updateValues([["Documented"]], rowIndex, 3)
-        } catch(error) {
-          console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
+        // If the channel has a video sheet, update the row for the video
+        if (channel.hasSheet() === true) {
+          const videoSheet = channel.getSheet()
+
+          // The use of a try catch here is a temporary bug workaround to avoid errors on videos missing from the sheet
+          try {
+            const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
+            videoSheet.updateValues([["Documented"]], rowIndex, 3)
+          } catch(error) {
+            console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
+          }
         }
 
         video.getDatabaseObject().wikiStatus = "Documented"
@@ -433,6 +446,12 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
  */
 function checkForDuplicateVideos() {
   channels.forEach(channel => {
+    // Skip any channel that doesn't have a video sheet
+    if (channel.hasSheet() === false) {
+      console.log(`${channel.getDatabaseObject().title} doesn't have a video sheet`)
+      return
+    }
+
     console.log(`Checking ${channel.getDatabaseObject().title} for duplicate videos`)
     const sheet = channel.getSheet()
     const videoIds = sheet.getValues("A:A")
@@ -459,6 +478,12 @@ function checkForDuplicateVideos() {
  */
 function checkForRemovedVideosMissingFromSheets() {
   channels.forEach(channel => {
+    // Skip any channel that doesn't have a video sheet
+    if (channel.hasSheet() === false) {
+      console.log(`${channel.getDatabaseObject().title} doesn't have a video sheet`)
+      return
+    }
+
     console.log(`Checking ${channel.getDatabaseObject().title} for missing sheet videos`)
     const parameters = {
       "videoStatus__in": "Private,Deleted,Unavailable",
