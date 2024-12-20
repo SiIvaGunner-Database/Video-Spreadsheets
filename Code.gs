@@ -6,7 +6,11 @@ HighQualityUtils.settings().setAuthToken(scriptProperties).disableYoutubeApi()
 
 // Get channels from database
 console.log("Fetching channels from database")
-const channels = HighQualityUtils.channels().getAll({ "channelStatus": "Public" })
+const channelOptions = {
+  "channelStatus": "Public",
+  "fields": "id,title,wiki,productionSpreadsheet,developmentSpreadsheet,productionChangelogSpreadsheet,developmentChangelogSpreadsheet,productionUndocumentedRipsPlaylist,developmentUndocumentedRipsPlaylist"
+}
+const channels = HighQualityUtils.channels().getAll(channelOptions)
 const spreadsheetBotId = HighQualityUtils.settings().getBotId()
 
 /**
