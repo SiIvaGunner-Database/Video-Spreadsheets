@@ -308,10 +308,6 @@ function checkAllVideoStatuses() {
     pageNumber = 1
   }
 
-  if (isSheetLocked(channelIndexKey, channelIndex) === true) {
-    console.warn("Conflicting scripts running. Ending current execution.")
-  }
-
   const endVideoIndex = videoIndex + statusCheckLimit
   const channel = channels[channelIndex]
   console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] video statuses ${videoIndex} to ${endVideoIndex} on page ${pageNumber}`)
@@ -593,21 +589,4 @@ function checkUndocumentedPlaylists() {
       }
     })
   })
-}
-
-/**
- * Check whether or not the specified channel videos sheet is being used by another process. Experimental.
- * @return {Boolean} Whether or not the given sheet is locked.
- */
-function isSheetLocked(indexKeyToIgnore, channelIndex) {
-  const indexKeys = ["checkRecentVideos.channelIndex", "checkVideoDetails.channelIndex", "checkVideoStatuses.channelIndex"]
-  const indexNumbers = []
-
-  indexKeys.forEach(key => {
-    if (key !== indexKeyToIgnore) {
-      indexNumbers.push(Number(scriptProperties.getProperty(key)))
-    }
-  })
-
-  return indexNumbers.includes(channelIndex)
 }
