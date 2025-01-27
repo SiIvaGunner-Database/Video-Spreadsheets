@@ -292,32 +292,54 @@ function getVideoDetails(video) {
  * Check all videos for YouTube status changes.
  */
 function checkAllVideoStatuses() {
-  const videoLimit = 50
+  // Ideally, the video limit should be changed to 50 for better performance, but HighQualityUtils needs to be updated to support that first.
+  const statusCheckLimit = 50
+  const videoLimit = 1000
+
   const channelIndexKey = "checkVideoStatuses.channelIndex"
   const videoIndexKey = "checkVideoStatuses.videoIndex"
+  const pageNumberKey = "checkVideoStatuses.pageNumber"
 
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
   let videoIndex = Number(scriptProperties.getProperty(videoIndexKey))
+  let pageNumber = Number(scriptProperties.getProperty(pageNumberKey))
+
+  if (pageNumber === 0) {
+    pageNumber = 1
+  }
 
   if (isSheetLocked(channelIndexKey, channelIndex) === true) {
     console.warn("Conflicting scripts running. Ending current execution.")
   }
 
-  const endVideoIndex = videoIndex + videoLimit
+  const endVideoIndex = videoIndex + statusCheckLimit
   const channel = channels[channelIndex]
-  console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] video statuses ${videoIndex} to ${endVideoIndex}`)
+  console.log(`Checking ${channel.getDatabaseObject().title} [${channelIndex}] video statuses ${videoIndex} to ${endVideoIndex} on page ${pageNumber}`)
 
-  const options = { "parameters": { "fields": "id,title,channel,videoStatus" } }
+  const options = {
+    "databaseLimit": videoLimit,
+    "parameters": {
+      "fields": "id,title,channel,videoStatus",
+      "page": pageNumber
+    }
+  }
+  // Set an array of all videos on the current page and channel.
   const [allVideos] = channel.getVideos(options)
+  // Set a separate array of videos in the range we want to check the status of right now.
   const videosToUpdate = allVideos.slice(videoIndex, endVideoIndex)
   videosToUpdate.forEach(video => checkVideoStatus(video))
   videoIndex = endVideoIndex
 
-  // If this is the last of the videos to update for this channel
-  if (videoIndex >= allVideos.length - 1) {
+  // If there are no more videos left to check on the page
+  if (videoIndex >= videoLimit) {
     videoIndex = 0
+    pageNumber++
+  } else if (videoIndex >= allVideos.length - 1 && allVideos.length < videoLimit) {
+    // Else if there are no more videos left to check on the channel
+    videoIndex = 0
+    pageNumber = 0
 
-    // If this is the last of the channels to update
+    // If this is the last of the channels
     if (channelIndex >= channels.length - 1) {
       channelIndex = 0
     } else {
