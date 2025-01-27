@@ -199,7 +199,7 @@ function checkAllVideoDetails() {
   console.log(`Updating database content`)
   HighQualityUtils.videos().updateAll(videos)
 
-  // If there are no more videos and this is the last channel to update
+  // If there are no more videos and this is the last channel
   if (videos.length < videoLimit && channelIndex >= channels.length - 1) {
     channelIndex = 0
     pageNumber = 0
@@ -292,7 +292,7 @@ function getVideoDetails(video) {
  * Check all videos for YouTube status changes.
  */
 function checkAllVideoStatuses() {
-  // Ideally, the video limit should be changed to 50 for better performance, but HighQualityUtils needs to be updated to support that first.
+  // Ideally, the video limit should be changed to 50 for better performance, but HighQualityUtils needs to be updated to support that first
   const statusCheckLimit = 50
   const videoLimit = 1000
 
@@ -319,9 +319,9 @@ function checkAllVideoStatuses() {
       "page": pageNumber
     }
   }
-  // Set an array of all videos on the current page and channel.
+  // Set an array of all videos on the current page and channel
   const [allVideos] = channel.getVideos(options)
-  // Set a separate array of videos in the range we want to check the status of right now.
+  // Set a separate array of videos in the range we want to check the status of right now
   const videosToUpdate = allVideos.slice(videoIndex, endVideoIndex)
   videosToUpdate.forEach(video => checkVideoStatus(video))
   videoIndex = endVideoIndex
@@ -395,20 +395,55 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
  * Check all channel wikis for new rip articles.
  */
 function checkAllWikiStatuses() {
-  channels.forEach(channel => checkChannelWikiStatuses(channel))
+  const videoLimit = 5000
+  const channelIndexKey = "checkAllWikiStatuses.channelIndex"
+  const pageNumberKey = "checkAllWikiStatuses.pageNumber"
+
+  let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
+  let pageNumber = Number(scriptProperties.getProperty(pageNumberKey))
+  let videos = []
+
+  if (pageNumber === 0) {
+    pageNumber = 1
+  }
+
+  while (channelIndex < channels.length) {
+    const channel = channels[channelIndex]
+
+    // Skip any channel that doesn't have a wiki
+    if (channel.getDatabaseObject().wiki === "") {
+      console.log(`${channel.getDatabaseObject().title} doesn't have a wiki`)
+      channelIndex++
+      continue
+    } else {
+      videos = checkChannelWikiStatuses(channel, pageNumber, videoLimit)
+      break
+    }
+  }
+
+  // If there are no more videos and this is the last channel
+  if (videos.length < videoLimit && channelIndex >= channels.length - 1) {
+    channelIndex = 0
+    pageNumber = 0
+  } else if (videos.length < videoLimit) {
+    channelIndex++
+    pageNumber = 0
+  } else {
+    pageNumber += 5
+  }
+
+  scriptProperties.setProperty(channelIndexKey, channelIndex)
+  scriptProperties.setProperty(pageNumberKey, pageNumber)
 }
 
 /**
  * Check a channel wiki for new rip articles.
  * @param {Channel} channel - The channel object.
+ * @param {Number} [pageNumber] - The page number for the database API. Defaults to 1.
+ * @param {Number} [videoLimit] - The video limit for the database API. Defaults to no limit.
+ * @return {Array[Video]} The videos that were found based on the given parameters.
  */
-function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById("UCIXM2qZRG9o4AFmEsKZUIvQ")) {
-  // Skip any channel that doesn't have a wiki
-  if (channel.getDatabaseObject().wiki === "") {
-    console.log(`${channel.getDatabaseObject().title} doesn't have a wiki`)
-    return
-  }
-
+function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById("UCIXM2qZRG9o4AFmEsKZUIvQ"), pageNumber = 1, videoLimit) {
   const categoryTitle = (channel.getId() === "UCCPGE1kAoonfPsbieW41ZZA" ? "Vips" : "Rips")
   const wikiCategoryMembers = HighQualityUtils.utils().fetchFandomCategoryMembers(channel.getDatabaseObject().wiki, categoryTitle)
   wikiCategoryMembers.push(...HighQualityUtils.utils().fetchFandomCategoryMembers(channel.getDatabaseObject().wiki, "Videos"))
@@ -417,10 +452,17 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
 
   const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
 
-  const options = { "parameters": { "fields": "id,title,wikiStatus" } }
+  const options = {
+    "databaseLimit": videoLimit,
+    "parameters": {
+      "fields": "id,title,wikiStatus",
+      "page": pageNumber
+    }
+  }
   const [videos] = channel.getVideos(options)
   const videoMap = new Map()
 
+  // Format each video name to match the wiki pages and create a map of videos for every distinct title
   videos.forEach(video => {
     const dbWikiFormattedTitle = HighQualityUtils.utils().formatFandomPageName(video.getDatabaseObject().title)
     const videosWithSameTitle = [video]
@@ -461,6 +503,8 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
       })
     }
   })
+
+  return videos
 }
 
 /**
