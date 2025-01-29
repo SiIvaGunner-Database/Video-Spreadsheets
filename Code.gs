@@ -508,7 +508,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
 }
 
 /**
- * Check for and delete rows with duplicated and empty video IDs on every channel videos sheet.
+ * Check for and delete rows with duplicated and empty video IDs on channel video sheets.
  */
 function checkForDuplicateVideos() {
   channels.forEach(channel => {
@@ -539,7 +539,7 @@ function checkForDuplicateVideos() {
 }
 
 /**
- * Check for missing video IDs of deleted/removed videos on every channel videos sheet.
+ * Check for missing video IDs of deleted/removed videos on channel video sheets.
  */
 function checkForRemovedVideosMissingFromSheets() {
   const videoLimit = 5000
@@ -584,7 +584,7 @@ function checkForRemovedVideosMissingFromSheets() {
 }
 
 /**
- * Check for missing video IDs of deleted/removed videos on a channel videos sheet.
+ * Check for missing video IDs of deleted/removed videos on a channel video sheet.
  * @param {Channel} channel - The channel object.
  * @param {Number} [pageNumber] - The page number for the database API. Defaults to 1.
  * @param {Number} [videoLimit] - The video limit for the database API. Defaults to no limit.
@@ -632,48 +632,94 @@ function checkForRemovedVideosMissingFromSheet(channel = HighQualityUtils.channe
 }
 
 /**
- * Check for any inconsistencies in every undocumented rips playlist.
+ * Check for any inconsistencies in undocumented rips playlists.
  */
 function checkUndocumentedPlaylists() {
-  channels.forEach(channel => {
-    const playlist = channel.getUndocumentedRipsPlaylist()
+  const videoLimit = 5000
+  const channelIndexKey = "checkUndocumentedPlaylists.channelIndex"
+  const pageNumberKey = "checkUndocumentedPlaylists.pageNumber"
 
-    if (playlist === undefined) {
-      return
+  let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
+  let pageNumber = Number(scriptProperties.getProperty(pageNumberKey))
+  let videos = []
+
+  if (pageNumber === 0) {
+    pageNumber = 1
+  }
+
+  while (channelIndex < channels.length) {
+    const channel = channels[channelIndex]
+
+    // Skip any channel that doesn't have an undocumented videos playlist
+    if (channel.getUndocumentedRipsPlaylist() === undefined) {
+      console.log(`${channel.getDatabaseObject().title} doesn't have an undocumented videos playlist`)
+      channelIndex++
+      continue
+    } else {
+      videos = checkUndocumentedPlaylist(channel, pageNumber, videoLimit)
+      break
     }
+  }
 
-    console.log(`Checking ${channel.getDatabaseObject().title} undocumented rips playlist`)
-    const options = { "parameters": { "fields": "id,wikiStatus,videoStatus" } }
-    const [databaseVideos] = channel.getVideos(options)
-    const databaseVideoIdMap = new Map(databaseVideos.map(video => [video.getId(), video]))
-    HighQualityUtils.settings().enableYoutubeApi()
-    const [playlistVideos] = playlist.getVideos(options)
-    HighQualityUtils.settings().disableYoutubeApi()
-    const playlistVideoIdMap = new Map(playlistVideos.map(video => [video.getId(), video]))
-    console.log(`Playlist videos: ${playlistVideos.length}\nDatabase videos: ${databaseVideos.length}`)
+  // If there are no more videos and this is the last channel
+  if (videos.length < videoLimit && channelIndex >= channels.length - 1) {
+    channelIndex = 0
+    pageNumber = 0
+  } else if (videos.length < videoLimit) {
+    channelIndex++
+    pageNumber = 0
+  } else {
+    pageNumber += 5
+  }
 
-    databaseVideos.forEach(video => {
-      if (video.getDatabaseObject().wikiStatus === "Undocumented" && playlistVideoIdMap.has(video.getId()) === false) {
-        const videoStatus = video.getDatabaseObject().videoStatus
-        console.warn(`Undocumented ${videoStatus} video with ID "${video.getId()}" is missing from playlist with ID "${playlist.getId()}"`)
+  scriptProperties.setProperty(channelIndexKey, channelIndex)
+  scriptProperties.setProperty(pageNumberKey, pageNumber)
+}
 
-        if (videoStatus === "Public" || videoStatus === "Unlisted") {
-          try {
-            playlist.addVideo(video.getId())
-          } catch (error) {
-            console.warn(error.stack)
-          }
+/**
+ * Check for any inconsistencies in an undocumented rips playlist.
+ * @param {Channel} channel - The channel object.
+ * @param {Number} [pageNumber] - The page number for the database API. Defaults to 1.
+ * @param {Number} [videoLimit] - The video limit for the database API. Defaults to no limit.
+ * @return {Array[Video]} The videos that were found based on the given parameters.
+ */
+function checkUndocumentedPlaylist(channel = HighQualityUtils.channels().getById("UCIXM2qZRG9o4AFmEsKZUIvQ"), pageNumber = 1, videoLimit) {
+  console.log(`Checking ${channel.getDatabaseObject().title} undocumented rips playlist`)
+  const options = {
+    "databaseLimit": videoLimit,
+    "parameters": {
+      "fields": "id,wikiStatus,videoStatus",
+      "page": pageNumber
+    }
+  }
+  const [databaseVideos] = channel.getVideos(options)
+  const databaseVideoIdMap = new Map(databaseVideos.map(video => [video.getId(), video]))
+  const playlist = channel.getUndocumentedRipsPlaylist()
+  const playlistVideoIds = HighQualityUtils.youtube().getPlaylistVideoIds(playlist.getId())
+  const playlistVideoIdMap = new Map(playlistVideoIds.map(videoId => [videoId, videoId]))
+  console.log(`Playlist videos: ${playlistVideoIds.length}\nDatabase videos: ${databaseVideos.length}`)
+
+  databaseVideos.forEach(video => {
+    if (video.getDatabaseObject().wikiStatus === "Undocumented" && playlistVideoIdMap.has(video.getId()) === false) {
+      const videoStatus = video.getDatabaseObject().videoStatus
+      console.warn(`Undocumented ${videoStatus} video with ID "${video.getId()}" is missing from playlist with ID "${playlist.getId()}"`)
+
+      if (videoStatus === "Public" || videoStatus === "Unlisted") {
+        try {
+          playlist.addVideo(video.getId())
+        } catch (error) {
+          console.warn(error.stack)
         }
       }
-    })
-
-    playlistVideos.forEach(video => {
-      if (databaseVideoIdMap.has(video.getId()) === false) {
-        console.warn(`Unknown video with ID "${video.getId()}" is in playlist with ID "${playlist.getId()}"`)
-      } else if (databaseVideoIdMap.get(video.getId()).getDatabaseObject().wikiStatus === "Documented") {
-        console.warn(`Documented video with ID "${video.getId()}" is in playlist with ID "${playlist.getId()}"`)
-        playlist.removeVideo(video.getId())
-      }
-    })
+    }
   })
+
+  playlistVideoIdMap.forEach(videoId => {
+    if (databaseVideoIdMap.has(videoId) === true && databaseVideoIdMap.get(videoId).getDatabaseObject().wikiStatus === "Documented") {
+      console.warn(`Documented video with ID "${videoId}" is in playlist with ID "${playlist.getId()}"`)
+      playlist.removeVideo(videoId)
+    }
+  })
+
+  return databaseVideos
 }
