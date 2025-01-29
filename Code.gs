@@ -539,53 +539,96 @@ function checkForDuplicateVideos() {
 }
 
 /**
- * Check for any missing video IDs on every channel videos sheet.
- * As of 12/10/2023, this function's purpose is to ensure all removed videos are present in the sheets.
+ * Check for missing video IDs of deleted/removed videos on every channel videos sheet.
  */
 function checkForRemovedVideosMissingFromSheets() {
-  channels.forEach(channel => {
+  const videoLimit = 5000
+  const channelIndexKey = "checkForRemovedVideosMissingFromSheets.channelIndex"
+  const pageNumberKey = "checkForRemovedVideosMissingFromSheets.pageNumber"
+
+  let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
+  let pageNumber = Number(scriptProperties.getProperty(pageNumberKey))
+  let videos = []
+
+  if (pageNumber === 0) {
+    pageNumber = 1
+  }
+
+  while (channelIndex < channels.length) {
+    const channel = channels[channelIndex]
+
     // Skip any channel that doesn't have a video sheet
     if (channel.hasSheet() === false) {
       console.log(`${channel.getDatabaseObject().title} doesn't have a video sheet`)
-      return
+      channelIndex++
+      continue
+    } else {
+      videos = checkForRemovedVideosMissingFromSheet(channel, pageNumber, videoLimit)
+      break
     }
+  }
 
-    console.log(`Checking ${channel.getDatabaseObject().title} for missing sheet videos`)
-    const parameters = {
-      "videoStatus__in": "Private,Deleted,Unavailable",
-      "channel": channel.getId()
-    }
-    const databaseVideos = HighQualityUtils.videos().getAll(parameters)
-    const sheet = channel.getSheet()
-    const sheetVideoIds = sheet.getValues("A:A")
-    const sheetVideoIdMap = new Map(sheetVideoIds.map(videoId => [videoId[0], videoId[0]]))
-    const videoValues = []
-    console.log(`Sheet videos: ${sheetVideoIds.length}\nDatabase videos: ${databaseVideos.length}`)
+  // If there are no more videos and this is the last channel
+  if (videos.length < videoLimit && channelIndex >= channels.length - 1) {
+    channelIndex = 0
+    pageNumber = 0
+  } else if (videos.length < videoLimit) {
+    channelIndex++
+    pageNumber = 0
+  } else {
+    pageNumber += 5
+  }
 
-    databaseVideos.forEach(video => {
-      if (sheetVideoIdMap.has(video.getId()) === false) {
-        console.warn(`Video with ID "${video.getId()}" is missing from spreadsheet with ID "${sheet.getSpreadsheet().getId()}"`)
-        videoValues.push([
-          HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
-          video.getWikiHyperlink(),
-          video.getDatabaseObject().wikiStatus,
-          video.getDatabaseObject().videoStatus,
-          HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
-          video.getDatabaseObject().duration,
-          video.getDatabaseObject().description,
-          video.getDatabaseObject().viewCount,
-          video.getDatabaseObject().likeCount,
-          video.getDatabaseObject().dislikeCount,
-          video.getDatabaseObject().commentCount
-        ])
-      }
-    })
+  scriptProperties.setProperty(channelIndexKey, channelIndex)
+  scriptProperties.setProperty(pageNumberKey, pageNumber)
+}
 
-    if (videoValues.length > 0) {
-      console.log(`Inserting ${videoValues.length} videos into sheet`)
-      sheet.insertValues(videoValues).sort(5, false)
+/**
+ * Check for missing video IDs of deleted/removed videos on a channel videos sheet.
+ * @param {Channel} channel - The channel object.
+ * @param {Number} [pageNumber] - The page number for the database API. Defaults to 1.
+ * @param {Number} [videoLimit] - The video limit for the database API. Defaults to no limit.
+ * @return {Array[Video]} The videos that were found based on the given parameters.
+ */
+function checkForRemovedVideosMissingFromSheet(channel = HighQualityUtils.channels().getById("UCIXM2qZRG9o4AFmEsKZUIvQ"), pageNumber = 1, videoLimit) {
+  console.log(`Checking ${channel.getDatabaseObject().title} for missing sheet videos`)
+  const parameters = {
+    "videoStatus__in": "Private,Deleted,Unavailable",
+    "channel": channel.getId(),
+    "page": pageNumber
+  }
+  const databaseVideos = HighQualityUtils.videos().getAll(parameters, videoLimit)
+  const sheet = channel.getSheet()
+  const sheetVideoIds = sheet.getValues("A:A")
+  const sheetVideoIdMap = new Map(sheetVideoIds.map(videoId => [videoId[0], videoId[0]]))
+  const videoValues = []
+  console.log(`Sheet videos: ${sheetVideoIds.length}\nDatabase videos: ${databaseVideos.length}`)
+
+  databaseVideos.forEach(video => {
+    if (sheetVideoIdMap.has(video.getId()) === false) {
+      console.warn(`Video with ID "${video.getId()}" is missing from spreadsheet with ID "${sheet.getSpreadsheet().getId()}"`)
+      videoValues.push([
+        HighQualityUtils.utils().formatYoutubeHyperlink(video.getId()),
+        video.getWikiHyperlink(),
+        video.getDatabaseObject().wikiStatus,
+        video.getDatabaseObject().videoStatus,
+        HighQualityUtils.utils().formatDate(video.getDatabaseObject().publishedAt),
+        video.getDatabaseObject().duration,
+        video.getDatabaseObject().description,
+        video.getDatabaseObject().viewCount,
+        video.getDatabaseObject().likeCount,
+        video.getDatabaseObject().dislikeCount,
+        video.getDatabaseObject().commentCount
+      ])
     }
   })
+
+  if (videoValues.length > 0) {
+    console.log(`Inserting ${videoValues.length} videos into sheet`)
+    sheet.insertValues(videoValues).sort(5, false)
+  }
+
+  return databaseVideos
 }
 
 /**
