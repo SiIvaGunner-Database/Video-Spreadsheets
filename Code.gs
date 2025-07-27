@@ -76,7 +76,7 @@ function checkNewVideo(video) {
 
   // If the channel has a wiki, add the video's wiki title
   if (video.getChannel().getDatabaseObject().wiki !== "") {
-    videoDefaults.wikiTitle = HighQualityUtils.utils().formatFandomPageName(video.getOriginalObject().title)
+    videoDefaults.wikiTitle = HighQualityUtils.utils().formatWikiPageName(video.getOriginalObject().title)
   }
 
   video.createDatabaseObject(videoDefaults)
@@ -233,7 +233,7 @@ function getVideoDetails(video) {
       console.log(change.message)
 
       if (change.key === "title") {
-        const newWikiHyperlink = HighQualityUtils.utils().formatFandomHyperlink(change.newValue, video.getChannel().getDatabaseObject().wiki)
+        const newWikiHyperlink = HighQualityUtils.utils().formatWikiHyperlink(change.newValue, video.getChannel().getDatabaseObject().wiki)
         titleChangelogValues.push([
           videoHyperlink,
           video.getWikiHyperlink(),
@@ -273,7 +273,7 @@ function getVideoDetails(video) {
 
   // If the channel has a wiki and the video doesn't have a wiki title or the original title has changed, update the wiki title
   if (video.getChannel().getDatabaseObject().wiki !== "" && (wikiTitle === "" || titleChangelogValues.length > 0)) {
-    wikiTitle = HighQualityUtils.utils().formatFandomPageName(video.getDatabaseObject().title)
+    wikiTitle = HighQualityUtils.utils().formatWikiPageName(video.getDatabaseObject().title)
   }
 
   // If the channel is SiIvaGunner, add the video's wiki title to the sheet
@@ -445,8 +445,8 @@ function checkAllWikiStatuses() {
  */
 function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById("UCIXM2qZRG9o4AFmEsKZUIvQ"), pageNumber = 1, videoLimit) {
   const categoryTitle = (channel.getId() === "UCCPGE1kAoonfPsbieW41ZZA" ? "Vips" : "Rips")
-  const wikiCategoryMembers = HighQualityUtils.utils().fetchFandomCategoryMembers(channel.getDatabaseObject().wiki, categoryTitle)
-  wikiCategoryMembers.push(...HighQualityUtils.utils().fetchFandomCategoryMembers(channel.getDatabaseObject().wiki, "Videos"))
+  const wikiCategoryMembers = HighQualityUtils.utils().fetchWikiCategoryMembers(channel.getDatabaseObject().wiki, categoryTitle)
+  wikiCategoryMembers.push(...HighQualityUtils.utils().fetchWikiCategoryMembers(channel.getDatabaseObject().wiki, "Videos"))
   const wikiTitles = wikiCategoryMembers.map(categoryMember => categoryMember.title)
   console.log(`Found ${wikiTitles.length} documented ${channel.getDatabaseObject().title} titles`)
 
@@ -464,7 +464,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
 
   // Format each video name to match the wiki pages and create a map of videos for every distinct title
   videos.forEach(video => {
-    const dbWikiFormattedTitle = HighQualityUtils.utils().formatFandomPageName(video.getDatabaseObject().title)
+    const dbWikiFormattedTitle = HighQualityUtils.utils().formatWikiPageName(video.getDatabaseObject().title)
     const videosWithSameTitle = [video]
 
     if (videoMap.has(dbWikiFormattedTitle) === true) {
