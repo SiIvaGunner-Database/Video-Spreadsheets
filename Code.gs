@@ -415,6 +415,11 @@ function checkAllWikiStatuses() {
       console.log(`${channel.getDatabaseObject().title} doesn't have a wiki`)
       channelIndex++
       continue
+    } else if (channel.getDatabaseObject().wiki.includes("https") === false) {
+      // Skip all Fandom wikis until the issue with 403 forbidden responses is resolved
+      console.log(`Skipping ${channel.getDatabaseObject().title} Fandom wiki`)
+      channelIndex++
+      continue
     } else {
       videos = checkChannelWikiStatuses(channel, pageNumber, videoLimit)
       break
