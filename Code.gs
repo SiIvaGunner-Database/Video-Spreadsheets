@@ -326,8 +326,8 @@ function checkAllVideoStatuses() {
   videosToUpdate.forEach(video => checkVideoStatus(video))
   videoIndex = endVideoIndex
 
-  // If there are no more videos left to check on the page
-  if (videoIndex >= videoLimit) {
+  // If there are no more videos left to check on the page and the channel has more videos left
+  if (videoIndex >= videoLimit && allVideos.length === videoLimit) {
     videoIndex = 0
     pageNumber++
   } else if (videoIndex >= allVideos.length - 1 && allVideos.length < videoLimit) {
@@ -345,6 +345,7 @@ function checkAllVideoStatuses() {
 
   scriptProperties.setProperty(channelIndexKey, channelIndex)
   scriptProperties.setProperty(videoIndexKey, videoIndex)
+  scriptProperties.setProperty(pageNumberKey, pageNumber)
 }
 
 /**
