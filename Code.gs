@@ -396,12 +396,14 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
  * Check all channel wikis for new rip articles.
  */
 function checkAllWikiStatuses() {
-  const videoLimit = 5000
+  const videoLimit = 1000
   const channelIndexKey = "checkAllWikiStatuses.channelIndex"
   const pageNumberKey = "checkAllWikiStatuses.pageNumber"
+  const cmcontinueKey = "checkAllWikiStatuses.cmcontinue"
 
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
   let pageNumber = Number(scriptProperties.getProperty(pageNumberKey))
+  let cmcontinue = scriptProperties.getProperty(cmcontinueKey)
   let videos = []
 
   if (pageNumber === 0) {
@@ -422,24 +424,28 @@ function checkAllWikiStatuses() {
       channelIndex++
       continue
     } else {
-      videos = checkChannelWikiStatuses(channel, pageNumber, videoLimit)
+      [videos, cmcontinue] = checkChannelWikiStatuses(channel, pageNumber, videoLimit, cmcontinue)
       break
     }
   }
 
-  // If there are no more videos and this is the last channel
-  if (videos.length < videoLimit && channelIndex >= channels.length - 1) {
-    channelIndex = 0
-    pageNumber = 0
-  } else if (videos.length < videoLimit) {
-    channelIndex++
-    pageNumber = 0
-  } else {
-    pageNumber += 5
+  // If there's no cmcontinue key, move on to the next videos and channels
+  if (cmcontinue === undefined) {
+    // If there are no more videos and this is the last channel
+    if (videos.length < videoLimit && channelIndex >= channels.length - 1) {
+      channelIndex = 0
+      pageNumber = 0
+    } else if (videos.length < videoLimit) {
+      channelIndex++
+      pageNumber = 0
+    } else {
+      pageNumber += 5
+    }
   }
 
   scriptProperties.setProperty(channelIndexKey, channelIndex)
   scriptProperties.setProperty(pageNumberKey, pageNumber)
+  scriptProperties.setProperty(cmcontinueKey, cmcontinue)
 }
 
 /**
@@ -449,23 +455,28 @@ function checkAllWikiStatuses() {
  * @param {Number} [videoLimit] - The video limit for the database API. Defaults to no limit.
  * @return {Array[Video]} The videos that were found based on the given parameters.
  */
-function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById("UCIXM2qZRG9o4AFmEsKZUIvQ"), pageNumber = 1, videoLimit) {
+function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById("UCIXM2qZRG9o4AFmEsKZUIvQ"), pageNumber = 1, videoLimit, cmcontinue) {
   const categoryTitle = (channel.getId() === "UCCPGE1kAoonfPsbieW41ZZA" ? "Vips" : "Rips")
-  const wikiCategoryMembers = HighQualityUtils.utils().fetchWikiCategoryMembers(channel.getDatabaseObject().wiki, categoryTitle)
+  const wikiOptions = {
+    "pageLimit": 10,
+    "cmcontinue": cmcontinue
+  }
+  let wikiCategoryMembers
+  [wikiCategoryMembers, cmcontinue] = HighQualityUtils.utils().fetchWikiCategoryMembers(channel.getDatabaseObject().wiki, categoryTitle, wikiOptions)
   wikiCategoryMembers.push(...HighQualityUtils.utils().fetchWikiCategoryMembers(channel.getDatabaseObject().wiki, "Videos"))
   const wikiTitles = wikiCategoryMembers.map(categoryMember => categoryMember.title)
   console.log(`Found ${wikiTitles.length} documented ${channel.getDatabaseObject().title} titles`)
 
   const undocumentedRipsPlaylist = channel.getUndocumentedRipsPlaylist()
 
-  const options = {
+  const dbOptions = {
     "databaseLimit": videoLimit,
     "parameters": {
       "fields": "id,title,wikiStatus",
       "page": pageNumber
     }
   }
-  const [videos] = channel.getVideos(options)
+  const [videos] = channel.getVideos(dbOptions)
   const videoMap = new Map()
 
   // Format each video name to match the wiki pages and create a map of videos for every distinct title
@@ -510,7 +521,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
     }
   })
 
-  return videos
+  return [videos, cmcontinue]
 }
 
 /**
