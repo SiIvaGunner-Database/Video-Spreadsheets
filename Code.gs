@@ -431,6 +431,7 @@ function checkAllWikiStatuses() {
 
   // If there's no cmcontinue key, move on to the next videos and channels
   if (cmcontinue === undefined) {
+    cmcontinue = ""
     // If there are no more videos and this is the last channel
     if (videos.length < videoLimit && channelIndex >= channels.length - 1) {
       channelIndex = 0
