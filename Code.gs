@@ -383,7 +383,7 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
       try {
         const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
         videoSheet.updateValues([[currentStatus]], rowIndex, 4).sort(5, false)
-      } catch(error) {
+      } catch (error) {
         console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
       }
     }
@@ -418,11 +418,6 @@ function checkAllWikiStatuses() {
       console.log(`${channel.getDatabaseObject().title} doesn't have a wiki`)
       channelIndex++
       continue
-    } else if (channel.getDatabaseObject().wiki.includes("https") === false) {
-      // Skip all Fandom wikis until the issue with 403 forbidden responses is resolved
-      console.log(`Skipping ${channel.getDatabaseObject().title} Fandom wiki`)
-      channelIndex++
-      continue
     } else {
       [videos, cmcontinue] = checkChannelWikiStatuses(channel, pageNumber, videoLimit, cmcontinue)
       break
@@ -440,7 +435,7 @@ function checkAllWikiStatuses() {
       channelIndex++
       pageNumber = 0
     } else {
-      pageNumber += 5
+      pageNumber++
     }
   }
 
@@ -473,6 +468,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
   const dbOptions = {
     "databaseLimit": videoLimit,
     "parameters": {
+      "wikiStatus": "Undocumented",
       "fields": "id,title,wikiStatus",
       "page": pageNumber
     }
@@ -511,7 +507,7 @@ function checkChannelWikiStatuses(channel = HighQualityUtils.channels().getById(
           try {
             const rowIndex = videoSheet.getRowIndexOfValue(video.getId())
             videoSheet.updateValues([["Documented"]], rowIndex, 3)
-          } catch(error) {
+          } catch (error) {
             console.warn(`Failed to find row for video ID ${video.getId()}`, error.stack)
           }
         }
