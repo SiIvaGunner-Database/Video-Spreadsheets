@@ -389,6 +389,8 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
     }
 
     video.update()
+    // Wait three seconds between requests to try to avoid 429 too many requests
+    Utilities.sleep(3000)
   }
 }
 
