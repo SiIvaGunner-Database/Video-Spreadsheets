@@ -354,6 +354,8 @@ function checkAllVideoStatuses() {
  */
 function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24")) {
   console.log(`Checking video status for ID "${video.getId()}"`)
+  // Wait three seconds before sending the YouTube request to try to avoid 429 too many requests
+  Utilities.sleep(3000)
   const oldStatus = video.getDatabaseObject().videoStatus
   const currentStatus = video.getYoutubeStatus()
 
@@ -389,8 +391,6 @@ function checkVideoStatus(video = HighQualityUtils.videos().getById("_Pj6PW8YU24
     }
 
     video.update()
-    // Wait three seconds between requests to try to avoid 429 too many requests
-    Utilities.sleep(3000)
   }
 }
 
