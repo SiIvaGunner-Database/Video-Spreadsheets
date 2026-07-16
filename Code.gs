@@ -12,6 +12,7 @@ const channelOptions = {
 }
 const channels = HighQualityUtils.channels().getAll(channelOptions)
 const spreadsheetBotId = HighQualityUtils.settings().getBotId()
+const bigThreeChannelIds = ["UC9ecwl3FTG66jIKA9JRDtmg", "UCCPGE1kAoonfPsbieW41ZZA", "UCIXM2qZRG9o4AFmEsKZUIvQ"]
 
 /**
  * Check all channels for newly uploaded rips.
@@ -19,7 +20,6 @@ const spreadsheetBotId = HighQualityUtils.settings().getBotId()
 function checkAllRecentVideos() {
   HighQualityUtils.settings().enableYoutubeApi()
 
-  const bigThreeChannelIds = ["UC9ecwl3FTG66jIKA9JRDtmg", "UCCPGE1kAoonfPsbieW41ZZA", "UCIXM2qZRG9o4AFmEsKZUIvQ"]
   const channelIndexKey = "checkRecentVideos.channelIndex"
   let channelIndex = Number(scriptProperties.getProperty(channelIndexKey))
 
@@ -418,6 +418,10 @@ function checkAllWikiStatuses() {
     // Skip any channel that doesn't have a wiki
     if (channel.getDatabaseObject().wiki === "") {
       console.log(`${channel.getDatabaseObject().title} doesn't have a wiki`)
+      channelIndex++
+      continue
+    } else if (bigThreeChannelIds.includes(channel.getId()) === false) {
+      console.log(`Skipping ${channel.getDatabaseObject().title}`)
       channelIndex++
       continue
     } else {
