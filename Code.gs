@@ -12,7 +12,7 @@ const channelOptions = {
 }
 const channels = HighQualityUtils.channels().getAll(channelOptions)
 const spreadsheetBotId = HighQualityUtils.settings().getBotId()
-const bigThreeChannelIds = ["UC9ecwl3FTG66jIKA9JRDtmg", "UCCPGE1kAoonfPsbieW41ZZA", "UCIXM2qZRG9o4AFmEsKZUIvQ"]
+const popularChannelIds = ["UC9ecwl3FTG66jIKA9JRDtmg", "UCCPGE1kAoonfPsbieW41ZZA", "UCIXM2qZRG9o4AFmEsKZUIvQ", "UCZcDKpIY0SItIsEWM0QB8og"]
 
 /**
  * Check all channels for newly uploaded rips.
@@ -26,7 +26,7 @@ function checkAllRecentVideos() {
   // Check three or four channels every time the script runs; each of the big three plus one fan channel
   channels.forEach((channel, index) => {
     // If it's not the channel's turn and the channel isn't part of the the big three, skip it
-    if (index !== channelIndex && bigThreeChannelIds.includes(channel.getId()) === false) {
+    if (index !== channelIndex && popularChannelIds.includes(channel.getId()) === false) {
       return
     }
 
@@ -420,7 +420,7 @@ function checkAllWikiStatuses() {
       console.log(`${channel.getDatabaseObject().title} doesn't have a wiki`)
       channelIndex++
       continue
-    } else if (bigThreeChannelIds.includes(channel.getId()) === false) {
+    } else if (popularChannelIds.includes(channel.getId()) === false) {
       console.log(`Skipping ${channel.getDatabaseObject().title}`)
       channelIndex++
       continue
